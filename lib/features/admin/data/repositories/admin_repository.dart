@@ -1,0 +1,24 @@
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../../../core/models/user_model.dart';
+
+class AdminRepository {
+  final SupabaseClient _supabase;
+
+  AdminRepository(this._supabase);
+
+  Future<List<UserModel>> getAllUsers() async {
+    final response = await _supabase
+        .from('users')
+        .select()
+        .order('nombre', ascending: true);
+    
+    return (response as List).map((json) => UserModel.fromJson(json)).toList();
+  }
+
+  Future<void> updateUserRole(String userId, String newRole) async {
+    await _supabase
+        .from('users')
+        .update({'role': newRole})
+        .eq('id', userId);
+  }
+}
