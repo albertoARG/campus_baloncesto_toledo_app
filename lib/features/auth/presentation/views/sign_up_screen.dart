@@ -93,7 +93,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               children: [
                 Center(
                   child: Image.asset(
-                    'assets/images/logo.png',
+                    'assets/images/logo32.png',
                     height: 80,
                   ),
                 ),

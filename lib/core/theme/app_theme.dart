@@ -6,16 +6,16 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFFFF6B9E), // Campus Toledo Pink
-        primary: const Color(0xFFFF6B9E),
-        secondary: const Color(0xFF2C2C2C), // Dark Grey for contrast (basketball color in logo)
+        seedColor: const Color(0xFF5E35B1), // Purple from Logo
+        primary: const Color(0xFF5E35B1),
+        secondary: const Color(0xFFFF9800), // Orange from Logo
         surface: Colors.white,
-        background: const Color(0xFFF9F9F9),
+        background: const Color(0xFFF5F5F5),
       ),
       textTheme: GoogleFonts.interTextTheme(),
       appBarTheme: AppBarTheme(
         centerTitle: true,
-        backgroundColor: const Color(0xFFFF6B9E),
+        backgroundColor: const Color(0xFF5E35B1),
         foregroundColor: Colors.white,
         elevation: 0,
         titleTextStyle: GoogleFonts.outfit(
@@ -26,7 +26,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFFFF6B9E),
+          backgroundColor: const Color(0xFF5E35B1),
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),

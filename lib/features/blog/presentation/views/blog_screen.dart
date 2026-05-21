@@ -30,28 +30,32 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
     final isAdminOrCoach = userRole == 'admin' || userRole == 'entrenador';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Blog del Campus'),
-      ),
-      body: postsAsync.when(
-        data: (posts) {
-          if (posts.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.photo_library_outlined, size: 80, color: Colors.grey),
-                  SizedBox(height: 16),
-                  Text('Aún no hay entradas en el blog', style: TextStyle(fontSize: 18, color: Colors.grey)),
-                ],
-              ),
-            );
-          }
+        appBar: AppBar(
+          title: const Text('Blog del Campus'),
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => context.go('/'),
+          ),
+        ),
+        body: postsAsync.when(
+          data: (posts) {
+            if (posts.isEmpty) {
+              return const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.photo_library_outlined, size: 80, color: Colors.grey),
+                    SizedBox(height: 16),
+                    Text('Aún no hay entradas en el blog', style: TextStyle(fontSize: 18, color: Colors.grey)),
+                  ],
+                ),
+              );
+            }
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(blogPostsProvider);
-            },
+            return RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(blogPostsProvider);
+              },
             child: ListView.builder(
               padding: const EdgeInsets.all(16),
               itemCount: posts.length,
@@ -63,7 +67,7 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   elevation: 4,
                   child: InkWell(
-                    onTap: () => context.push('/blog/detail', extra: post),
+                    onTap: () => context.push('/blog/detail/${post.id}'),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [

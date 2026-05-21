@@ -9,16 +9,39 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../providers/blog_providers.dart';
 import '../../../../features/blog/data/models/blog_post_model.dart';
 
-class EditBlogPostScreen extends ConsumerStatefulWidget {
-  final BlogPostModel post;
-  
-  const EditBlogPostScreen({super.key, required this.post});
+class EditBlogPostScreen extends ConsumerWidget {
+  final String postId;
+
+  const EditBlogPostScreen({super.key, required this.postId});
 
   @override
-  ConsumerState<EditBlogPostScreen> createState() => _EditBlogPostScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final postsAsync = ref.watch(blogPostsProvider);
+
+    return postsAsync.when(
+      data: (posts) {
+        final post = posts.firstWhere(
+          (p) => p.id == postId,
+          orElse: () => posts.first,
+        );
+        return EditBlogPostScreenInner(post: post);
+      },
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, s) => Scaffold(body: Center(child: Text('Error: $e'))),
+    );
+  }
 }
 
-class _EditBlogPostScreenState extends ConsumerState<EditBlogPostScreen> {
+class EditBlogPostScreenInner extends ConsumerStatefulWidget {
+  final BlogPostModel post;
+
+  const EditBlogPostScreenInner({super.key, required this.post});
+
+  @override
+  ConsumerState<EditBlogPostScreenInner> createState() => _EditBlogPostScreenInnerState();
+}
+
+class _EditBlogPostScreenInnerState extends ConsumerState<EditBlogPostScreenInner> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _titleController;
   late TextEditingController _contentController;
@@ -78,11 +101,13 @@ class _EditBlogPostScreenState extends ConsumerState<EditBlogPostScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() => _isLoading = true);
 
     try {
-      await ref.read(blogRepositoryProvider).updatePost(
+      await ref
+          .read(blogRepositoryProvider)
+          .updatePost(
             id: widget.post.id,
             title: _titleController.text,
             content: _contentController.text,
@@ -99,13 +124,14 @@ class _EditBlogPostScreenState extends ConsumerState<EditBlogPostScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Entrada actualizada correctamente')),
         );
-        context.pop(); // Solo un pop: volvemos a la pantalla de detalle
+        // Reemplazamos la ruta en el historial del navegador para que Edit desaparezca
+        context.replace('/blog');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error al actualizar: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error al actualizar: $e')));
       }
     } finally {
       if (mounted) {
@@ -116,12 +142,11 @@ class _EditBlogPostScreenState extends ConsumerState<EditBlogPostScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasGallery = _keepExistingImages.isNotEmpty || _newGalleryImages.isNotEmpty;
+    final hasGallery =
+        _keepExistingImages.isNotEmpty || _newGalleryImages.isNotEmpty;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Editar Entrada'),
-      ),
+      appBar: AppBar(title: const Text('Editar Entrada')),
       body: _isLoading
           ? Center(
               child: Column(
@@ -142,7 +167,12 @@ class _EditBlogPostScreenState extends ConsumerState<EditBlogPostScreen> {
                   children: [
                     // ── Portada (solo muestra, no se puede cambiar aquí) ──────
                     if (widget.post.imageUrl.isNotEmpty) ...[
-                      Text('Foto de portada', style: Theme.of(context).textTheme.titleSmall?.copyWith(color: Colors.grey)),
+                      Text(
+                        'Foto de portada',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.titleSmall?.copyWith(color: Colors.grey),
+                      ),
                       const SizedBox(height: 8),
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
@@ -154,9 +184,12 @@ class _EditBlogPostScreenState extends ConsumerState<EditBlogPostScreen> {
                           placeholder: (context, url) => Container(
                             height: 160,
                             color: Colors.grey.shade200,
-                            child: const Center(child: CircularProgressIndicator()),
+                            child: const Center(
+                              child: CircularProgressIndicator(),
+                            ),
                           ),
-                          errorWidget: (c, u, e) => const Icon(Icons.broken_image),
+                          errorWidget: (c, u, e) =>
+                              const Icon(Icons.broken_image),
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -240,10 +273,13 @@ class _EditBlogPostScreenState extends ConsumerState<EditBlogPostScreen> {
                                     child: SizedBox(
                                       width: 24,
                                       height: 24,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     ),
                                   ),
-                                  errorWidget: (c, u, e) => const Icon(Icons.broken_image),
+                                  errorWidget: (c, u, e) =>
+                                      const Icon(Icons.broken_image),
                                 ),
                                 label: 'Subida',
                                 onRemove: () => _removeExistingImage(index),
@@ -328,7 +364,10 @@ class _EditBlogPostScreenState extends ConsumerState<EditBlogPostScreen> {
                   topRight: Radius.circular(8),
                 ),
               ),
-              child: const Text('Nueva', style: TextStyle(color: Colors.white, fontSize: 10)),
+              child: const Text(
+                'Nueva',
+                style: TextStyle(color: Colors.white, fontSize: 10),
+              ),
             ),
           ),
         // Botón X para eliminar

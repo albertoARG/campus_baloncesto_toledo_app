@@ -4,7 +4,7 @@
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
-    "theme_color": "#673AB7",
+    "theme_color": "#5E35B1",
     "description": "App de gestión del campus",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,

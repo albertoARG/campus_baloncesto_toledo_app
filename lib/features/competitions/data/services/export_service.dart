@@ -22,10 +22,23 @@ class ExportService {
   ExportService(this._supabaseClient, this._competitionsRepo);
 
   Future<String> exportStandingsToExcel() async {
-    // 1. Get all published days
+    // 1. Get all days
     final days = await _competitionsRepo.getStationDays();
-    final publishedDays = days.where((d) => d.isPublished).toList();
-    publishedDays.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    final allDays = days.toList();
+    allDays.sort((a, b) {
+      final numRegex = RegExp(r'\d+');
+      final matchA = numRegex.firstMatch(a.nombre);
+      final matchB = numRegex.firstMatch(b.nombre);
+      
+      if (matchA != null && matchB != null) {
+        final numA = int.parse(matchA.group(0)!);
+        final numB = int.parse(matchB.group(0)!);
+        if (numA != numB) {
+          return numA.compareTo(numB);
+        }
+      }
+      return a.nombre.compareTo(b.nombre);
+    });
     
     // 2. Get all groups
     final groupsResponse = await _supabaseClient.from('teams').select().order('nombre');
@@ -34,8 +47,10 @@ class ExportService {
     final globalRankings = await _competitionsRepo.getGlobalStandings();
     
     final Map<String, List<Map<String, dynamic>>> rankingsPerDay = {};
-    for (var day in publishedDays) {
-       rankingsPerDay[day.id] = await _competitionsRepo.getGlobalStandings(dayId: day.id);
+    for (var day in allDays) {
+       if (day.isPublished) {
+         rankingsPerDay[day.id] = await _competitionsRepo.getGlobalStandings(dayId: day.id);
+       }
     }
     
     // Map players to their teams
@@ -47,6 +62,11 @@ class ExportService {
 
     // 4. Create Excel
     var excel = Excel.createExcel();
+    
+    CellStyle centerStyle = CellStyle(
+      horizontalAlign: HorizontalAlign.Center,
+      verticalAlign: VerticalAlign.Center,
+    );
     
     for (var group in groupsResponse as List) {
       final teamId = group['id'];
@@ -70,7 +90,7 @@ class ExportService {
       List<CellValue> headers = [
         TextCellValue('Jugador'),
       ];
-      for (var day in publishedDays) {
+      for (var day in allDays) {
         final shortName = day.nombre.replaceAll(RegExp(r'competici[oó]n\s*', caseSensitive: false), '').trim();
         headers.add(TextCellValue(shortName));
       }
@@ -87,24 +107,33 @@ class ExportService {
           TextCellValue('${player.nombre} ${player.apellidos}'),
         ];
         
-        for (var day in publishedDays) {
-           final dayRankingList = rankingsPerDay[day.id]!;
-           // Find player's score for this day
-           int dayScore = 0;
-           try {
-             final dayRanking = dayRankingList.firstWhere(
-               (r) => (r['player'] as UserModel).id == player.id
-             );
-             dayScore = dayRanking['totalScore'] ?? 0;
-           } catch (_) {
-             dayScore = 0;
+        for (var day in allDays) {
+           if (!day.isPublished) {
+             rowData.add(TextCellValue(''));
+           } else {
+             final dayRankingList = rankingsPerDay[day.id] ?? [];
+             // Find player's score for this day
+             int dayScore = 0;
+             try {
+               final dayRanking = dayRankingList.firstWhere(
+                 (r) => (r['player'] as UserModel).id == player.id
+               );
+               dayScore = dayRanking['totalScore'] ?? 0;
+             } catch (_) {
+               dayScore = 0;
+             }
+             rowData.add(IntCellValue(dayScore));
            }
-           rowData.add(IntCellValue(dayScore));
         }
         
         rowData.add(IntCellValue(totalOverall));
         
         sheetObject.appendRow(rowData);
+        
+        // Centrar las columnas de puntuación (de la 1 en adelante)
+        for (int c = 1; c < rowData.length; c++) {
+          sheetObject.cell(CellIndex.indexByColumnRow(columnIndex: c, rowIndex: sheetObject.maxRows - 1)).cellStyle = centerStyle;
+        }
       }
     }
     

@@ -7,11 +7,17 @@ class CloudinaryService {
   final String uploadPreset = 'campus_preset';
 
   Future<String?> uploadImage(XFile imageFile) async {
-    final uri = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/image/upload');
+    final uri = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/auto/upload');
+    
+    final bytes = await imageFile.readAsBytes();
     
     final request = http.MultipartRequest('POST', uri)
       ..fields['upload_preset'] = uploadPreset
-      ..files.add(await http.MultipartFile.fromPath('file', imageFile.path));
+      ..files.add(http.MultipartFile.fromBytes(
+        'file',
+        bytes,
+        filename: imageFile.name,
+      ));
 
     final response = await request.send();
 

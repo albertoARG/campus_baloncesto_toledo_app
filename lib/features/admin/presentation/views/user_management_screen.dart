@@ -15,7 +15,7 @@ class UserManagementScreen extends ConsumerWidget {
         title: const Text('Gestionar Usuarios'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/'),
+          onPressed: () => context.pop(),
         ),
       ),
       body: usersAsync.when(
@@ -54,6 +54,7 @@ class UserManagementScreen extends ConsumerWidget {
                   const PopupMenuItem(value: 'admin', child: Text('Admin')),
                   const PopupMenuItem(value: 'entrenador', child: Text('Entrenador')),
                   const PopupMenuItem(value: 'jugador', child: Text('Jugador')),
+                  const PopupMenuItem(value: 'jugador premium', child: Text('Jugador Premium')),
                   const PopupMenuItem(value: 'familiar', child: Text('Familiar')),
                   const PopupMenuItem(value: 'visitante', child: Text('Visitante')),
                 ],

@@ -8,9 +8,9 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../providers/blog_providers.dart';
 
 class BlogDetailScreen extends ConsumerWidget {
-  final BlogPostModel post;
+  final String postId;
 
-  const BlogDetailScreen({super.key, required this.post});
+  const BlogDetailScreen({super.key, required this.postId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -19,121 +19,151 @@ class BlogDetailScreen extends ConsumerWidget {
     final String userRole = userProfileAsync.value?.role ?? 'visitante';
     final isAdminOrCoach = userRole == 'admin' || userRole == 'entrenador';
 
-    final latestPost = postsAsync.maybeWhen(
-      data: (posts) => posts.firstWhere((p) => p.id == post.id, orElse: () => post),
-      orElse: () => post,
-    );
+    return postsAsync.when(
+      data: (posts) {
+        final latestPost = posts.firstWhere(
+          (p) => p.id == postId,
+          orElse: () => posts
+              .first, // Fallback if not found, though realistically it should be
+        );
 
-    // La portada (image_url) siempre va primero.
-    // La galería (image_urls) se añade después, evitando duplicados.
-    final Set<String> seenUrls = {};
-    final List<String> allImages = [];
-    if (latestPost.imageUrl.isNotEmpty) {
-      allImages.add(latestPost.imageUrl);
-      seenUrls.add(latestPost.imageUrl);
-    }
-    if (latestPost.imageUrls != null) {
-      for (final url in latestPost.imageUrls!) {
-        if (!seenUrls.contains(url)) {
-          allImages.add(url);
-          seenUrls.add(url);
+        // La portada (image_url) siempre va primero.
+        // La galería (image_urls) se añade después, evitando duplicados.
+        final Set<String> seenUrls = {};
+        final List<String> allImages = [];
+        if (latestPost.imageUrl.isNotEmpty) {
+          allImages.add(latestPost.imageUrl);
+          seenUrls.add(latestPost.imageUrl);
         }
-      }
-    }
+        if (latestPost.imageUrls != null) {
+          for (final url in latestPost.imageUrls!) {
+            if (!seenUrls.contains(url)) {
+              allImages.add(url);
+              seenUrls.add(url);
+            }
+          }
+        }
 
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text(''), // Empty
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(
-          color: Colors.white,
-          shadows: [Shadow(color: Colors.black45, blurRadius: 10)],
-        ),
-      ),
-      floatingActionButton: isAdminOrCoach 
-          ? FloatingActionButton(
-              onPressed: () => context.push('/blog/edit', extra: latestPost),
-              tooltip: 'Editar Entrada',
-              child: const Icon(Icons.edit),
-            )
-          : null,
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CarouselSlider(
-              key: ValueKey(allImages.length),
-              options: CarouselOptions(
-                height: MediaQuery.of(context).size.height * 0.45,
-                viewportFraction: 1.0,
-                enableInfiniteScroll: allImages.length > 1,
-                autoPlay: allImages.length > 1,
-              ),
-              items: allImages.map((imgUrl) {
-                return Builder(
-                  builder: (BuildContext context) {
-                    return Container(
-                      width: MediaQuery.of(context).size.width,
-                      decoration: BoxDecoration(color: Colors.grey.shade200),
-                      child: CachedNetworkImage(
-                        imageUrl: imgUrl,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
-                        errorWidget: (context, url, error) => const Icon(Icons.error),
-                      ),
-                    );
-                  },
-                );
-              }).toList(),
+        return Scaffold(
+          extendBodyBehindAppBar: true,
+          appBar: AppBar(
+            title: const Text(''), // Empty
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            iconTheme: const IconThemeData(
+              color: Colors.white,
+              shadows: [Shadow(color: Colors.black45, blurRadius: 10)],
             ),
-            Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    latestPost.title,
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
+          ),
+          floatingActionButton: isAdminOrCoach
+              ? FloatingActionButton(
+                  onPressed: () =>
+                      context.pushReplacement('/blog/edit/${latestPost.id}'),
+                  tooltip: 'Editar Entrada',
+                  child: const Icon(Icons.edit),
+                )
+              : null,
+          body: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CarouselSlider(
+                  key: ValueKey(allImages.length),
+                  options: CarouselOptions(
+                    height: MediaQuery.of(context).size.height * 0.45,
+                    viewportFraction: 1.0,
+                    enableInfiniteScroll: allImages.length > 1,
+                    autoPlay: allImages.length > 1,
                   ),
-                  const SizedBox(height: 12),
-                  Row(
+                  items: allImages.map((imgUrl) {
+                    return Builder(
+                      builder: (BuildContext context) {
+                        return Container(
+                          width: MediaQuery.of(context).size.width,
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade200,
+                          ),
+                          child: CachedNetworkImage(
+                            imageUrl: imgUrl,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                            errorWidget: (context, url, error) =>
+                                const Icon(Icons.error),
+                          ),
+                        );
+                      },
+                    );
+                  }).toList(),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.person_outline, size: 20, color: Colors.grey),
-                      const SizedBox(width: 6),
                       Text(
-                        latestPost.authorName ?? 'Coordinación', 
-                        style: const TextStyle(color: Colors.grey, fontSize: 15, fontWeight: FontWeight.w500)
+                        latestPost.title,
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                       ),
-                      const Spacer(),
-                      const Icon(Icons.date_range, size: 20, color: Colors.grey),
-                      const SizedBox(width: 6),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.person_outline,
+                            size: 20,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            latestPost.authorName ?? 'Coordinación',
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                          const Spacer(),
+                          const Icon(
+                            Icons.date_range,
+                            size: 20,
+                            color: Colors.grey,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${latestPost.createdAt.day}/${latestPost.createdAt.month}/${latestPost.createdAt.year}',
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontSize: 15,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 24),
                       Text(
-                        '${latestPost.createdAt.day}/${latestPost.createdAt.month}/${latestPost.createdAt.year}', 
-                        style: const TextStyle(color: Colors.grey, fontSize: 15)
+                        latestPost.content,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontSize: 17,
+                          height: 1.6,
+                          color: Colors.black87,
+                        ),
                       ),
+                      const SizedBox(height: 40),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  Text(
-                    latestPost.content,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontSize: 17, 
-                      height: 1.6,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, s) => Scaffold(body: Center(child: Text('Error: $e'))),
     );
   }
 }

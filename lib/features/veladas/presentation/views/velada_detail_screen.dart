@@ -69,10 +69,11 @@ class VeladaDetailScreen extends ConsumerWidget {
                   );
                 }
               } catch (e) {
-                if (context.mounted)
+                if (context.mounted) {
                   ScaffoldMessenger.of(
                     context,
                   ).showSnackBar(SnackBar(content: Text('Error: $e')));
+                }
               }
             },
             child: const Text('Generar'),
@@ -296,7 +297,7 @@ class _GroupCard extends ConsumerWidget {
           ),
           membersAsync.when(
             data: (members) {
-              if (members.isEmpty)
+              if (members.isEmpty) {
                 return Column(
                   children: [
                     const Padding(
@@ -310,6 +311,7 @@ class _GroupCard extends ConsumerWidget {
                     ),
                   ],
                 );
+              }
               return Column(
                 children: [
                   ListView.builder(

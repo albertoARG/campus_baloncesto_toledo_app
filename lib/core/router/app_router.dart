@@ -6,6 +6,7 @@ import 'package:campus_baloncesto_app/features/competitions/presentation/views/s
 import 'package:campus_baloncesto_app/features/competitions/presentation/views/add_score_screen.dart';
 import 'package:campus_baloncesto_app/features/competitions/presentation/views/station_management_screen.dart';
 import 'package:campus_baloncesto_app/features/competitions/presentation/views/user_station_scores_screen.dart';
+import 'package:campus_baloncesto_app/features/stats/presentation/views/stats_screen.dart';
 import 'package:campus_baloncesto_app/features/tablon/presentation/views/tablon_screen.dart';
 import 'package:campus_baloncesto_app/features/tablon/presentation/views/create_tablon_post_screen.dart';
 import 'package:campus_baloncesto_app/features/blog/presentation/views/blog_screen.dart';
@@ -24,6 +25,7 @@ import 'package:campus_baloncesto_app/features/siesta/presentation/views/siesta_
 import 'package:campus_baloncesto_app/features/siesta/presentation/views/siesta_free_throws_screen.dart';
 import 'package:campus_baloncesto_app/features/siesta/presentation/views/siesta_participant_matches_screen.dart';
 import 'package:campus_baloncesto_app/features/siesta/presentation/views/siesta_participant_scores_screen.dart';
+import 'package:campus_baloncesto_app/features/trainings/presentation/views/trainings_screen.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:go_router/go_router.dart';
@@ -46,43 +48,100 @@ class GoRouterRefreshStream extends ChangeNotifier {
 
 final appRouter = GoRouter(
   initialLocation: '/',
-  refreshListenable: GoRouterRefreshStream(Supabase.instance.client.auth.onAuthStateChange),
+  refreshListenable: GoRouterRefreshStream(
+    Supabase.instance.client.auth.onAuthStateChange,
+  ),
   routes: [
     GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
     GoRoute(path: '/login', builder: (context, state) => const SignInScreen()),
-    GoRoute(path: '/register', builder: (context, state) => const SignUpScreen()),
-    GoRoute(path: '/standings', builder: (context, state) => const StandingsScreen()),
-    GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
+    GoRoute(
+      path: '/register',
+      builder: (context, state) => const SignUpScreen(),
+    ),
+    GoRoute(
+      path: '/standings',
+      builder: (context, state) => const StandingsScreen(),
+    ),
+    GoRoute(
+      path: '/profile',
+      builder: (context, state) => const ProfileScreen(),
+    ),
     GoRoute(path: '/tablon', builder: (context, state) => const TablonScreen()),
-    GoRoute(path: '/tablon/create', builder: (context, state) => const CreateTablonPostScreen()),
+    GoRoute(
+      path: '/tablon/create',
+      builder: (context, state) => const CreateTablonPostScreen(),
+    ),
     GoRoute(path: '/blog', builder: (context, state) => const BlogScreen()),
     GoRoute(
-      path: '/blog/detail', 
-      builder: (context, state) => BlogDetailScreen(post: state.extra as BlogPostModel),
+      path: '/blog/detail/:id',
+      builder: (context, state) {
+        return BlogDetailScreen(postId: state.pathParameters['id']!);
+      },
     ),
     GoRoute(
-      path: '/blog/edit',
-      builder: (context, state) => EditBlogPostScreen(post: state.extra as BlogPostModel),
+      path: '/blog/edit/:id',
+      builder: (context, state) {
+        return EditBlogPostScreen(postId: state.pathParameters['id']!);
+      },
     ),
-    GoRoute(path: '/blog/add', builder: (context, state) => const CreateBlogPostScreen()),
-    GoRoute(path: '/add-score', builder: (context, state) => const AddScoreScreen()),
-    GoRoute(path: '/competitions/manage', builder: (context, state) => const StationManagementScreen()),
     GoRoute(
-      path: '/competitions/user/:id', 
+      path: '/blog/add',
+      builder: (context, state) => const CreateBlogPostScreen(),
+    ),
+    GoRoute(
+      path: '/add-score',
+      builder: (context, state) => const AddScoreScreen(),
+    ),
+    GoRoute(
+      path: '/competitions/manage',
+      builder: (context, state) => const StationManagementScreen(),
+    ),
+    GoRoute(
+      path: '/competitions/user/:id',
       builder: (context, state) => UserStationScoresScreen(
         userId: state.pathParameters['id']!,
         userName: state.extra as String? ?? 'Jugador',
-      )
+      ),
     ),
-    GoRoute(path: '/veladas', builder: (context, state) => const VeladasStandingsScreen()),
-    GoRoute(path: '/admin/users', builder: (context, state) => const UserManagementScreen()),
-    GoRoute(path: '/admin/groups', builder: (context, state) => const GroupManagementScreen()),
-    GoRoute(path: '/admin/veladas', builder: (context, state) => const VeladasManagementScreen()),
-    GoRoute(path: '/siesta', builder: (context, state) => const SiestaHomeScreen()),
-    GoRoute(path: '/siesta/create', builder: (context, state) => const CreateSiestaCompetitionScreen()),
-    GoRoute(path: '/siesta/league/:id', builder: (context, state) => SiestaLeagueScreen(competitionId: state.pathParameters['id']!)),
-    GoRoute(path: '/siesta/daily/:id', builder: (context, state) => SiestaDailyLadderScreen(competitionId: state.pathParameters['id']!)),
-    GoRoute(path: '/siesta/freethrows/:id', builder: (context, state) => SiestaFreeThrowsScreen(competitionId: state.pathParameters['id']!)),
+    GoRoute(
+      path: '/veladas',
+      builder: (context, state) => const VeladasStandingsScreen(),
+    ),
+    GoRoute(
+      path: '/admin/users',
+      builder: (context, state) => const UserManagementScreen(),
+    ),
+    GoRoute(
+      path: '/admin/groups',
+      builder: (context, state) => const GroupManagementScreen(),
+    ),
+    GoRoute(
+      path: '/admin/veladas',
+      builder: (context, state) => const VeladasManagementScreen(),
+    ),
+    GoRoute(
+      path: '/siesta',
+      builder: (context, state) => const SiestaHomeScreen(),
+    ),
+    GoRoute(
+      path: '/siesta/create',
+      builder: (context, state) => const CreateSiestaCompetitionScreen(),
+    ),
+    GoRoute(
+      path: '/siesta/league/:id',
+      builder: (context, state) =>
+          SiestaLeagueScreen(competitionId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/siesta/daily/:id',
+      builder: (context, state) =>
+          SiestaDailyLadderScreen(competitionId: state.pathParameters['id']!),
+    ),
+    GoRoute(
+      path: '/siesta/freethrows/:id',
+      builder: (context, state) =>
+          SiestaFreeThrowsScreen(competitionId: state.pathParameters['id']!),
+    ),
     GoRoute(
       path: '/siesta/participant/:comp_id/:part_id',
       builder: (context, state) => SiestaParticipantMatchesScreen(
@@ -98,10 +157,17 @@ final appRouter = GoRouter(
         participantName: state.extra as String? ?? 'Jugador',
       ),
     ),
+    GoRoute(
+      path: '/trainings',
+      builder: (context, state) => const TrainingsScreen(),
+    ),
+    GoRoute(path: '/stats', builder: (context, state) => const StatsScreen()),
   ],
   redirect: (context, state) {
     final session = Supabase.instance.client.auth.currentSession;
-    final isGoingToAuth = state.matchedLocation == '/login' || state.matchedLocation == '/register';
+    final isGoingToAuth =
+        state.matchedLocation == '/login' ||
+        state.matchedLocation == '/register';
 
     // If logged in and going to login/register, send home
     if (session != null && isGoingToAuth) {

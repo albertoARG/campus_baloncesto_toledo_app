@@ -68,7 +68,7 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
               children: [
                 const SizedBox(height: 60),
                 Center(
-                  child: Image.asset('assets/images/logo.png', height: 120),
+                  child: Image.asset('assets/images/logo32.png', height: 120),
                 ),
                 const SizedBox(height: 24),
                 Text(

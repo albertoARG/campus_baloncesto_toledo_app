@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../tablon/presentation/providers/tablon_providers.dart';
 import '../../../blog/presentation/providers/blog_providers.dart';
 import '../../../../core/services/notification_service.dart';
+
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -14,14 +18,163 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with WidgetsBindingObserver {
+  bool _webNotificationsEnabled = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Refresh the banner data every time we open/return to home
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.invalidate(tablonPostsProvider);
     });
+
+    // Listen for incoming messages when the app is in the foreground
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (mounted) {
+        final title = message.notification?.title ?? 'Nuevo Aviso';
+        final body = message.notification?.body ?? '';
+        // Refrescar datos del tablón automáticamente
+        ref.invalidate(tablonPostsProvider);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$title: $body'),
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'VER',
+              onPressed: () {
+                context.push('/tablon');
+              },
+            ),
+          ),
+        );
+      }
+    });
+
+    // On Web: check if already registered, otherwise show prompt dialog
+    if (kIsWeb) {
+      _checkAndPromptWebNotifications();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Cuando la app vuelve del segundo plano (ej: al pulsar notificación), refrescar datos
+    if (state == AppLifecycleState.resumed) {
+      ref.invalidate(tablonPostsProvider);
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  Future<void> _checkAndPromptWebNotifications() async {
+    final prefs = await SharedPreferences.getInstance();
+    final alreadyRegistered =
+        prefs.getBool('web_notifications_registered') ?? false;
+
+    if (alreadyRegistered) {
+      if (mounted) setState(() => _webNotificationsEnabled = true);
+      return;
+    }
+
+    // Small delay to let the UI render first
+    await Future.delayed(const Duration(milliseconds: 800));
+
+    if (!mounted) return;
+
+    final accepted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Row(
+          children: [
+            Icon(
+              Icons.notifications_active,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+            const SizedBox(width: 10),
+            const Expanded(child: Text('Activar Notificaciones')),
+          ],
+        ),
+        content: const Text(
+          '¿Quieres recibir notificaciones de los avisos del campus directamente en tu dispositivo?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Ahora no'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            icon: const Icon(Icons.check),
+            label: const Text('Activar'),
+          ),
+        ],
+      ),
+    );
+
+    if (accepted == true) {
+      await _registerWebNotifications();
+    }
+  }
+
+  Future<void> _registerWebNotifications() async {
+    void showMsg(String msg) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg), duration: const Duration(seconds: 4)),
+        );
+      }
+    }
+
+    try {
+      final messaging = FirebaseMessaging.instance;
+      final settings = await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+
+      if (settings.authorizationStatus != AuthorizationStatus.authorized) {
+        showMsg(
+          '❌ Permisos denegados. Actívalos en los ajustes del navegador.',
+        );
+        return;
+      }
+
+      final token = await messaging.getToken(
+        vapidKey:
+            'BLCT2TkMoEbywUENHTyAKM0UFMAnl5Jszp66Fh7VJEj7Kcy7NLdm0JepIKJWiEArcMogERlLhp0p6NLKcg6K92I',
+      );
+
+      if (token == null) {
+        showMsg('❌ No se pudo obtener el token. Intenta recargar la web.');
+        return;
+      }
+
+      await Supabase.instance.client.from('fcm_tokens').upsert({
+        'token': token,
+        'platform': 'web',
+      }, onConflict: 'token');
+
+      // Remember for next time
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('web_notifications_registered', true);
+
+      if (mounted) setState(() => _webNotificationsEnabled = true);
+      showMsg('✅ ¡Notificaciones activadas correctamente!');
+    } catch (e) {
+      showMsg('❌ Error: $e');
+    }
   }
 
   @override
@@ -52,11 +205,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: const Text('Campus Toledo'),
         centerTitle: false,
         actions: [
+          // Show bell only on Web and only if not yet registered
+          if (kIsWeb && !_webNotificationsEnabled)
+            IconButton(
+              icon: const Icon(Icons.notifications_active_outlined),
+              tooltip: 'Activar Notificaciones',
+              onPressed: () => _registerWebNotifications(),
+            ),
           IconButton(
             icon: const Icon(Icons.person),
             tooltip: 'Mi Perfil',
-            onPressed: () =>
-                session != null ? context.go('/profile') : context.go('/login'),
+            onPressed: () => session != null
+                ? context.push('/profile')
+                : context.push('/login'),
           ),
         ],
       ),
@@ -70,6 +231,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         canManageScores: canManageScores,
         isAdmin: isAdmin,
         session: session,
+        role: role,
       ),
     );
   }
@@ -153,7 +315,7 @@ class _AppDrawer extends ConsumerWidget {
             label: 'Clasificación',
             onTap: () {
               Navigator.pop(context);
-              context.go('/standings');
+              context.push('/standings');
             },
           ),
           _DrawerItem(
@@ -169,7 +331,7 @@ class _AppDrawer extends ConsumerWidget {
             label: 'Competiciones Siesta',
             onTap: () {
               Navigator.pop(context);
-              context.go('/siesta');
+              context.push('/siesta');
             },
           ),
           _DrawerItem(
@@ -177,7 +339,7 @@ class _AppDrawer extends ConsumerWidget {
             label: 'Veladas',
             onTap: () {
               Navigator.pop(context);
-              context.go('/veladas');
+              context.push('/veladas');
             },
           ),
           _DrawerItem(
@@ -193,9 +355,28 @@ class _AppDrawer extends ConsumerWidget {
             label: 'Mi Perfil',
             onTap: () {
               Navigator.pop(context);
-              isLoggedIn ? context.go('/profile') : context.go('/login');
+              isLoggedIn ? context.push('/profile') : context.push('/login');
             },
           ),
+          _DrawerItem(
+            icon: Icons.fitness_center,
+            label: 'Entrenamientos',
+            onTap: () {
+              Navigator.pop(context);
+              context.push('/trainings');
+            },
+          ),
+          if (role == 'admin' ||
+              role == 'entrenador' ||
+              role == 'jugador premium')
+            _DrawerItem(
+              icon: Icons.bar_chart,
+              label: 'Estadísticas Deportivas',
+              onTap: () {
+                Navigator.pop(context);
+                context.push('/stats');
+              },
+            ),
 
           // ─── Sección: Solo Staff ────────────────────────────
           if (canManageScores) ...[
@@ -236,7 +417,7 @@ class _AppDrawer extends ConsumerWidget {
               iconColor: Theme.of(context).colorScheme.primary,
               onTap: () {
                 Navigator.pop(context);
-                context.go('/admin/groups');
+                context.push('/admin/groups');
               },
             ),
             _DrawerItem(
@@ -245,7 +426,7 @@ class _AppDrawer extends ConsumerWidget {
               iconColor: Theme.of(context).colorScheme.primary,
               onTap: () {
                 Navigator.pop(context);
-                context.go('/admin/veladas');
+                context.push('/admin/veladas');
               },
             ),
             if (isAdmin)
@@ -255,7 +436,7 @@ class _AppDrawer extends ConsumerWidget {
                 iconColor: Theme.of(context).colorScheme.primary,
                 onTap: () {
                   Navigator.pop(context);
-                  context.go('/admin/users');
+                  context.push('/admin/users');
                 },
               ),
           ],
@@ -303,7 +484,7 @@ class _AppDrawer extends ConsumerWidget {
               label: 'Iniciar Sesión',
               onTap: () {
                 Navigator.pop(context);
-                context.go('/login');
+                context.push('/login');
               },
             ),
         ],
@@ -341,11 +522,13 @@ class _HomeBody extends ConsumerWidget {
   final bool canManageScores;
   final bool isAdmin;
   final dynamic session;
+  final String role;
 
   const _HomeBody({
     required this.canManageScores,
     required this.isAdmin,
     required this.session,
+    required this.role,
   });
 
   @override
@@ -465,12 +648,8 @@ class _HomeBody extends ConsumerWidget {
               error: (_, __) => const SizedBox.shrink(),
             ),
 
-            GridView.count(
-              crossAxisCount: 2,
-              crossAxisSpacing: 14,
-              mainAxisSpacing: 14,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: items,
             ),
           ],
@@ -480,124 +659,235 @@ class _HomeBody extends ConsumerWidget {
   }
 
   List<Widget> _buildItems(BuildContext context) {
-    final all = <_NavCard>[
-      _NavCard(
-        label: 'Clasificación',
-        icon: Icons.leaderboard,
-        color: const Color(0xFF1A73E8),
-        onTap: () => context.go('/standings'),
+    final isPremium =
+        role == 'jugador premium' || role == 'admin' || role == 'entrenador';
+
+    final widgets = <Widget>[
+      _ImageNavCard(
+        imageUrl: 'assets/images/compet.png',
+        title: 'VER COMPETICIONES',
+        onTap: () => context.push('/standings'),
+        secondaryTitle: canManageScores ? 'AÑADIR PUNTUACIÓN' : null,
+        onSecondaryTap: canManageScores
+            ? () => context.push('/add-score')
+            : null,
       ),
-      _NavCard(
-        label: 'Blog',
-        icon: Icons.photo_library,
-        color: const Color(0xFFD81B60),
+      _ImageNavCard(
+        imageUrl: 'assets/images/blog.jpg',
+        title: 'BLOG DEL CAMPUS',
         onTap: () => context.push('/blog'),
       ),
-      _NavCard(
-        label: 'Competiciones Siesta',
-        icon: Icons.sports_tennis,
-        color: const Color(0xFF00BFA5),
-        onTap: () => context.go('/siesta'),
+      _ImageNavCard(
+        imageUrl: 'assets/images/siesta.jpg',
+        title: 'COMPES DE SIESTA',
+        onTap: () => context.push('/siesta'),
       ),
-      _NavCard(
-        label: 'Clasificación Veladas',
-        icon: Icons.nightlight_round,
-        color: const Color(0xFF0D47A1),
-        onTap: () => context.go('/veladas'),
+      _ImageNavCard(
+        imageUrl: 'assets/images/veladas.jpg',
+        title: 'VELADAS',
+        onTap: () => context.push('/veladas'),
       ),
-      _NavCard(
-        label: 'Tablón de Anuncios',
-        icon: Icons.forum,
-        color: const Color(0xFFF57C00),
+      _ImageNavCard(
+        imageUrl: 'assets/images/anuncio.jpg',
+        title: 'TABLÓN DE ANUNCIOS',
         onTap: () => context.push('/tablon'),
       ),
-      if (canManageScores)
-        _NavCard(
-          label: 'Puntuar Estación',
-          icon: Icons.sports_score,
-          color: const Color(0xFFFF6B9E),
-          onTap: () => context.push('/add-score'),
-        ),
-      if (canManageScores)
-        _NavCard(
-          label: 'Gestión Competición',
-          icon: Icons.tune,
-          color: const Color(0xFF00897B),
-          onTap: () => context.push('/competitions/manage'),
-        ),
-      if (canManageScores)
-        _NavCard(
-          label: 'Grupos Competición',
-          icon: Icons.group,
-          color: const Color(0xFF8E24AA),
-          onTap: () => context.go('/admin/groups'),
-        ),
-      if (canManageScores)
-        _NavCard(
-          label: 'Gestión Veladas',
-          icon: Icons.auto_awesome,
-          color: const Color(0xFF00B0FF),
-          onTap: () => context.go('/admin/veladas'),
-        ),
-      if (isAdmin)
-        _NavCard(
-          label: 'Gestionar Usuarios',
-          icon: Icons.manage_accounts,
-          color: const Color(0xFFFB8C00),
-          onTap: () => context.go('/admin/users'),
+      _ImageNavCard(
+        imageUrl:
+            'https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=800&auto=format&fit=crop',
+        title: 'ENTRENAMIENTOS',
+        onTap: () => context.push('/trainings'),
+      ),
+      if (isPremium)
+        _ImageNavCard(
+          imageUrl:
+              'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=800&auto=format&fit=crop',
+          title: 'ESTADÍSTICAS DEPORTIVAS',
+          onTap: () => context.push('/stats'),
         ),
     ];
 
-    return all.map((c) => _buildCard(context, c)).toList();
+    if (canManageScores || isAdmin) {
+      widgets.add(const SizedBox(height: 16));
+      widgets.add(
+        const Text(
+          'ZONA ADMINISTRACIÓN',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            color: Colors.grey,
+            letterSpacing: 1.2,
+          ),
+        ),
+      );
+      widgets.add(const SizedBox(height: 8));
+
+      if (canManageScores) {
+        widgets.add(
+          _buildAdminBtn(
+            context,
+            'Gestión Competición',
+            Icons.tune,
+            () => context.push('/competitions/manage'),
+          ),
+        );
+        widgets.add(
+          _buildAdminBtn(
+            context,
+            'Grupos Competición',
+            Icons.group,
+            () => context.push('/admin/groups'),
+          ),
+        );
+        widgets.add(
+          _buildAdminBtn(
+            context,
+            'Gestión Veladas',
+            Icons.auto_awesome,
+            () => context.push('/admin/veladas'),
+          ),
+        );
+      }
+      if (isAdmin) {
+        widgets.add(
+          _buildAdminBtn(
+            context,
+            'Gestionar Usuarios',
+            Icons.manage_accounts,
+            () => context.push('/admin/users'),
+          ),
+        );
+      }
+    }
+
+    return widgets;
   }
 
-  Widget _buildCard(BuildContext context, _NavCard item) {
-    return InkWell(
-      onTap: item.onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          color: item.color.withOpacity(0.12),
-          border: Border.all(color: item.color.withOpacity(0.3), width: 1.5),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: item.color.withOpacity(0.2),
-              ),
-              child: Icon(item.icon, size: 36, color: item.color),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              item.label,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-                color: item.color,
-              ),
-            ),
-          ],
-        ),
+  Widget _buildAdminBtn(
+    BuildContext context,
+    String title,
+    IconData icon,
+    VoidCallback onTap,
+  ) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      elevation: 1,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: ListTile(
+        leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 14),
+        onTap: onTap,
       ),
     );
   }
 }
 
-class _NavCard {
-  final String label;
-  final IconData icon;
-  final Color color;
+class _ImageNavCard extends StatelessWidget {
+  final String imageUrl;
+  final String title;
   final VoidCallback onTap;
-  const _NavCard({
-    required this.label,
-    required this.icon,
-    required this.color,
+  final String? secondaryTitle;
+  final VoidCallback? onSecondaryTap;
+
+  const _ImageNavCard({
+    required this.imageUrl,
+    required this.title,
     required this.onTap,
+    this.secondaryTitle,
+    this.onSecondaryTap,
   });
+
+  @override
+  Widget build(BuildContext context) {
+    final isNetwork = imageUrl.startsWith('http');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            InkWell(
+              onTap: onTap,
+              child: SizedBox(
+                height: 160,
+                child: isNetwork
+                    ? Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: Colors.grey[300],
+                          height: 160,
+                          child: const Icon(
+                            Icons.image_not_supported,
+                            size: 50,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      )
+                    : Image.asset(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: Colors.grey[300],
+                          height: 160,
+                          child: const Icon(
+                            Icons.image_not_supported,
+                            size: 50,
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ),
+              ),
+            ),
+            Material(
+              color: Theme.of(context).colorScheme.primary,
+              child: InkWell(
+                onTap: onTap,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 16,
+                  ),
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (secondaryTitle != null && onSecondaryTap != null) ...[
+              Container(height: 1, color: Colors.white24),
+              Material(
+                color: Theme.of(context).colorScheme.primary,
+                child: InkWell(
+                  onTap: onSecondaryTap,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 16,
+                    ),
+                    child: Text(
+                      secondaryTitle!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
 }
