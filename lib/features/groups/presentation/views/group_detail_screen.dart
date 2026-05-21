@@ -32,7 +32,7 @@ class GroupDetailScreen extends ConsumerWidget {
                   data: (users) {
                     // Solo jugadores o visitantes para simplificar, o todos
                     final eligibleUsers = users
-                        .where((u) => u.role == 'jugador' || u.role == 'visitante')
+                        .where((u) => u.role == 'jugador' || u.role == 'jugador premium' || u.role == 'visitante')
                         .toList();
 
                     return ListView.builder(
@@ -41,7 +41,7 @@ class GroupDetailScreen extends ConsumerWidget {
                         final user = eligibleUsers[index];
                         return ListTile(
                           title: Text('${user.nombre} ${user.apellidos}'),
-                          subtitle: Text(user.role),
+                          subtitle: Text('${user.posicion ?? 'Sin posición'} • ${user.edad != null ? '${user.edad} años' : 'Edad N/D'} • Nivel ${user.nivel ?? 'N/D'}'),
                           trailing: IconButton(
                             icon: const Icon(Icons.add_circle, color: Colors.green),
                             onPressed: () async {
@@ -131,7 +131,7 @@ class GroupDetailScreen extends ConsumerWidget {
               return ListTile(
                 leading: const CircleAvatar(child: Icon(Icons.person)),
                 title: Text('${member.nombre} ${member.apellidos}'),
-                subtitle: Text(member.posicion ?? 'Jugador'),
+                subtitle: Text('${member.posicion ?? 'Sin posición'} • ${member.edad != null ? '${member.edad} años' : 'Edad N/D'} • Nivel ${member.nivel ?? 'N/D'}'),
                 trailing: IconButton(
                   icon: const Icon(Icons.remove_circle, color: Colors.red),
                   onPressed: () async {
