@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/siesta_providers.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../data/services/siesta_export_service.dart';
+import '../../data/models/siesta_competition_model.dart';
 import 'widgets/add_participant_dialog.dart';
 import 'widgets/add_match_dialog.dart';
 import 'widgets/siesta_bracket_view.dart';
@@ -17,6 +19,56 @@ class SiestaLeagueScreen extends ConsumerStatefulWidget {
 
 class _SiestaLeagueScreenState extends ConsumerState<SiestaLeagueScreen> {
   int _selectedTabIndex = 0; // 0 for Standings, 1 for Bracket
+  bool _isExporting = false;
+
+  Future<void> _exportToPdf() async {
+    if (_isExporting) return;
+
+    final participants =
+        ref.read(siestaParticipantsProvider(widget.competitionId)).value;
+    final matches =
+        ref.read(siestaMatchesProvider(widget.competitionId)).value;
+    final compList = ref.read(siestaCompetitionsProvider).value ?? [];
+
+    if (participants == null || participants.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay datos que exportar todavía.')),
+      );
+      return;
+    }
+
+    SiestaCompetitionModel? competition;
+    try {
+      competition = compList.firstWhere((c) => c.id == widget.competitionId);
+    } catch (_) {
+      competition = null;
+    }
+    if (competition == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se encontró la competición.')),
+      );
+      return;
+    }
+
+    setState(() => _isExporting = true);
+    try {
+      await SiestaExportService().exportLeagueToPdf(
+        competition: competition,
+        participants: participants,
+        matches: matches ?? [],
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al exportar el PDF: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
 
   void _sortParticipants(List<dynamic> group, List<dynamic> matches) {
     group.sort((a, b) {
@@ -115,6 +167,20 @@ class _SiestaLeagueScreenState extends ConsumerState<SiestaLeagueScreen> {
         ),
         title: const Text('Clasificación / Eliminatorias'),
         actions: [
+          IconButton(
+            icon: _isExporting
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.picture_as_pdf),
+            tooltip: 'Exportar a PDF',
+            onPressed: _isExporting ? null : _exportToPdf,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {

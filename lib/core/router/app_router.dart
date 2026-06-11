@@ -2,6 +2,7 @@ import 'package:campus_baloncesto_app/features/auth/presentation/views/sign_in_s
 import 'package:campus_baloncesto_app/features/auth/presentation/views/sign_up_screen.dart';
 import 'package:campus_baloncesto_app/features/home/presentation/views/home_screen.dart';
 import 'package:campus_baloncesto_app/features/admin/presentation/views/user_management_screen.dart';
+import 'package:campus_baloncesto_app/features/admin/presentation/views/admin_dashboard_screen.dart';
 import 'package:campus_baloncesto_app/features/competitions/presentation/views/standings_screen.dart';
 import 'package:campus_baloncesto_app/features/competitions/presentation/views/add_score_screen.dart';
 import 'package:campus_baloncesto_app/features/competitions/presentation/views/station_management_screen.dart';
@@ -106,6 +107,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/veladas',
       builder: (context, state) => const VeladasStandingsScreen(),
+    ),
+    GoRoute(
+      path: '/admin/dashboard',
+      builder: (context, state) => const AdminDashboardScreen(),
     ),
     GoRoute(
       path: '/admin/users',

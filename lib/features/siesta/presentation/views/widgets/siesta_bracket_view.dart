@@ -41,20 +41,32 @@ class SiestaBracketView extends ConsumerWidget {
           roundsMap.putIfAbsent(ronda, () => []).add(m);
         }
 
-        // Hardcode some expected round order for sorting
-        final roundOrder = ['octavos', 'cuartos', 'semifinal', 'final'];
+        // Round order: groups (fase de grupos) ALWAYS first, then elimination
+        // rounds at the end, ordered octavos -> cuartos -> semifinal -> final.
+        const roundOrder = [
+          'dieciseisavos',
+          'octavos',
+          'cuartos',
+          'semifinal',
+          'semifinales',
+          'tercer',
+          'final',
+        ];
+        int elimIndex(String r) =>
+            roundOrder.indexWhere((e) => r.toLowerCase().contains(e));
         final sortedRoundKeys = roundsMap.keys.toList()
           ..sort((a, b) {
-            final idxA = roundOrder.indexWhere(
-              (r) => a.toLowerCase().contains(r),
-            );
-            final idxB = roundOrder.indexWhere(
-              (r) => b.toLowerCase().contains(r),
-            );
-            if (idxA != -1 && idxB != -1) return idxA.compareTo(idxB);
-            if (idxA != -1) return -1;
-            if (idxB != -1) return 1;
-            return a.compareTo(b); // fallback alphabetical
+            final idxA = elimIndex(a);
+            final idxB = elimIndex(b);
+            final aElim = idxA != -1;
+            final bElim = idxB != -1;
+            // Both elimination rounds -> order by stage.
+            if (aElim && bElim) return idxA.compareTo(idxB);
+            // Only one elimination -> groups first, eliminations last.
+            if (aElim) return 1;
+            if (bElim) return -1;
+            // Both groups/other -> alphabetical.
+            return a.toLowerCase().compareTo(b.toLowerCase());
           });
 
         // We will display a 2D pannable board for the bracket

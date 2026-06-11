@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/siesta_providers.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../data/services/siesta_export_service.dart';
+import '../../data/models/siesta_competition_model.dart';
 import 'widgets/add_free_throw_dialog.dart';
 
 class SiestaFreeThrowsScreen extends ConsumerStatefulWidget {
@@ -14,6 +16,52 @@ class SiestaFreeThrowsScreen extends ConsumerStatefulWidget {
 }
 
 class _SiestaFreeThrowsScreenState extends ConsumerState<SiestaFreeThrowsScreen> {
+  bool _isExporting = false;
+
+  Future<void> _exportToPdf() async {
+    if (_isExporting) return;
+    final scores =
+        ref.read(siestaDailyScoresProvider(widget.competitionId)).value;
+    final compList = ref.read(siestaCompetitionsProvider).value ?? [];
+
+    if (scores == null || scores.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay datos que exportar todavía.')),
+      );
+      return;
+    }
+    SiestaCompetitionModel? competition;
+    try {
+      competition = compList.firstWhere((c) => c.id == widget.competitionId);
+    } catch (_) {
+      competition = null;
+    }
+    if (competition == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se encontró la competición.')),
+      );
+      return;
+    }
+
+    setState(() => _isExporting = true);
+    try {
+      await SiestaExportService().exportFreeThrowsToPdf(
+        competition: competition,
+        scores: scores,
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al exportar el PDF: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scoresAsync = ref.watch(siestaDailyScoresProvider(widget.competitionId));
@@ -36,6 +84,20 @@ class _SiestaFreeThrowsScreenState extends ConsumerState<SiestaFreeThrowsScreen>
         ),
         title: const Text('Clasificación Tiros Libres'),
         actions: [
+          IconButton(
+            icon: _isExporting
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(Icons.picture_as_pdf),
+            tooltip: 'Exportar a PDF',
+            onPressed: _isExporting ? null : _exportToPdf,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {

@@ -393,6 +393,16 @@ class _AppDrawer extends ConsumerWidget {
                 ),
               ),
             ),
+            if (isAdmin)
+              _DrawerItem(
+                icon: Icons.dashboard_outlined,
+                label: 'Dashboard',
+                iconColor: Theme.of(context).colorScheme.primary,
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push('/admin/dashboard');
+                },
+              ),
             _DrawerItem(
               icon: Icons.sports_score,
               label: 'Puntuar Estación',
