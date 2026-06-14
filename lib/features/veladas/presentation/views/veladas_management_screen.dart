@@ -56,35 +56,58 @@ class VeladasManagementScreen extends ConsumerWidget {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Actualizar',
+            onPressed: () => ref.invalidate(allVeladasProvider),
+          ),
+        ],
       ),
-      body: veladasAsync.when(
-        data: (veladas) {
-          if (veladas.isEmpty) {
-            return const Center(child: Text('Aún no se han creado veladas.'));
-          }
-          return ListView.builder(
-            itemCount: veladas.length,
-            itemBuilder: (context, index) {
-              final velada = veladas[index];
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: ListTile(
-                   leading: const Icon(Icons.nightlight_round, color: Colors.indigo),
-                   title: Text(velada.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
-                   subtitle: Text('Fecha: ${velada.fecha.day}/${velada.fecha.month}/${velada.fecha.year}'),
-                   trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                   onTap: () {
-                     Navigator.of(context).push(
-                       MaterialPageRoute(builder: (_) => VeladaDetailScreen(velada: velada))
-                     );
-                   },
-                ),
-              );
-            },
-          );
+      body: RefreshIndicator(
+        onRefresh: () async {
+          ref.invalidate(allVeladasProvider);
+          await ref.read(allVeladasProvider.future);
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, s) => Center(child: Text('Error al cargar veladas: $e')),
+        child: veladasAsync.when(
+          data: (veladas) {
+            if (veladas.isEmpty) {
+              return ListView(
+                children: const [
+                  SizedBox(height: 120),
+                  Center(child: Text('Aún no se han creado veladas.')),
+                ],
+              );
+            }
+            return ListView.builder(
+              itemCount: veladas.length,
+              itemBuilder: (context, index) {
+                final velada = veladas[index];
+                return Card(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: ListTile(
+                     leading: const Icon(Icons.nightlight_round, color: Colors.indigo),
+                     title: Text(velada.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
+                     subtitle: Text('Fecha: ${velada.fecha.day}/${velada.fecha.month}/${velada.fecha.year}'),
+                     trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                     onTap: () {
+                       Navigator.of(context).push(
+                         MaterialPageRoute(builder: (_) => VeladaDetailScreen(velada: velada))
+                       );
+                     },
+                  ),
+                );
+              },
+            );
+          },
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, s) => ListView(
+            children: [
+              const SizedBox(height: 120),
+              Center(child: Text('Error al cargar veladas: $e')),
+            ],
+          ),
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showCreateVeladaDialog(context, ref),

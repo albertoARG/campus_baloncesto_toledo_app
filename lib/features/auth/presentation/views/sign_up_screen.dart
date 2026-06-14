@@ -30,6 +30,29 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     super.dispose();
   }
 
+  String _mensajeErrorRegistro(AuthException e) {
+    final msg = e.message.toLowerCase();
+    if (e.statusCode == '429' ||
+        msg.contains('rate limit') ||
+        msg.contains('too many') ||
+        msg.contains('exceeded')) {
+      return 'Se han enviado demasiados correos en poco tiempo. Espera un rato '
+          'e inténtalo de nuevo, o pide al administrador que cree tu cuenta.';
+    }
+    if (msg.contains('already registered') ||
+        msg.contains('already been registered') ||
+        msg.contains('user already')) {
+      return 'Ese correo ya está registrado. Inicia sesión o usa otro distinto.';
+    }
+    if (msg.contains('password')) {
+      return 'La contraseña no es válida. Debe tener al menos 6 caracteres.';
+    }
+    if (msg.contains('invalid') && msg.contains('email')) {
+      return 'El correo introducido no es válido.';
+    }
+    return 'No se ha podido completar el registro: ${e.message}';
+  }
+
   Future<void> _signUp() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -44,16 +67,29 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         apellidos: _apellidosController.text.trim(),
       );
       
-      // Update the public.users table directly to add "edad"
+      // Update the public.users table directly to add "edad".
+      // Solo funcionará si el registro devuelve sesión (sin confirmación por
+      // email); si falla por RLS no debe romper el alta, así que se aísla.
       if (res.user != null && _edadController.text.trim().isNotEmpty) {
-        await Supabase.instance.client.from('users').update({
-          'edad': int.parse(_edadController.text.trim())
-        }).eq('id', res.user!.id);
+        try {
+          await Supabase.instance.client.from('users').update({
+            'edad': int.parse(_edadController.text.trim())
+          }).eq('id', res.user!.id);
+        } catch (_) {
+          // La edad se podrá completar más tarde desde el perfil.
+        }
       }
-      
+
       if (mounted) {
+        final bool necesitaConfirmar = res.session == null;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Registro exitoso. Serás redirigido para iniciar sesión.')),
+          SnackBar(
+            content: Text(
+              necesitaConfirmar
+                  ? 'Cuenta creada. Revisa tu correo para confirmarla antes de iniciar sesión.'
+                  : 'Registro completado. Ya puedes iniciar sesión.',
+            ),
+          ),
         );
         // Add a slight delay so user reads the snackbar
         Future.delayed(const Duration(seconds: 2), () {
@@ -63,7 +99,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
     } on AuthException catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: ${e.message}')),
+          SnackBar(content: Text(_mensajeErrorRegistro(e))),
         );
       }
     } catch (e) {
