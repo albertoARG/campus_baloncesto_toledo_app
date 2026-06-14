@@ -77,6 +77,16 @@ class _StationManagementScreenState extends ConsumerState<StationManagementScree
       appBar: AppBar(
         leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.pop()),
         title: const Text('Gestión de Pruebas y Días'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Actualizar',
+            onPressed: () {
+              ref.invalidate(stationsProvider);
+              ref.invalidate(stationDaysProvider);
+            },
+          ),
+        ],
       ),
       body: Column(
         children: [

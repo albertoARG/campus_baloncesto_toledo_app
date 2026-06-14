@@ -36,6 +36,16 @@ class StatsScreen extends ConsumerWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Estadísticas Deportivas'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Actualizar',
+              onPressed: () {
+                ref.invalidate(allStatsProvider);
+                ref.invalidate(currentUserStatsProvider);
+              },
+            ),
+          ],
           bottom: TabBar(
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,

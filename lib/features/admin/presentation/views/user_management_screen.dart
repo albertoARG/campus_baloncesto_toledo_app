@@ -17,11 +17,23 @@ class UserManagementScreen extends ConsumerWidget {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Actualizar',
+            onPressed: () => ref.invalidate(allUsersProvider),
+          ),
+        ],
       ),
       body: usersAsync.when(
-        data: (users) => ListView.builder(
-          itemCount: users.length,
-          itemBuilder: (context, index) {
+        data: (users) => RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(allUsersProvider);
+            await ref.read(allUsersProvider.future);
+          },
+          child: ListView.builder(
+            itemCount: users.length,
+            itemBuilder: (context, index) {
             final user = users[index];
             return ListTile(
               leading: CircleAvatar(
@@ -61,6 +73,7 @@ class UserManagementScreen extends ConsumerWidget {
               ),
             );
           },
+          ),
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, s) => Center(child: Text('Error: $e')),

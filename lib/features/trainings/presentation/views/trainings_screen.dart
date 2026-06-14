@@ -23,15 +23,29 @@ class TrainingsScreen extends ConsumerWidget {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Actualizar',
+            onPressed: () => ref.invalidate(trainingsProvider),
+          ),
+        ],
       ),
       body: trainingsAsync.when(
         data: (trainings) {
-          if (trainings.isEmpty) {
-            return const Center(
-              child: Text('No hay entrenamientos programados.'),
-            );
-          }
-          return ListView.builder(
+          return RefreshIndicator(
+            onRefresh: () async {
+              ref.invalidate(trainingsProvider);
+              await ref.read(trainingsProvider.future);
+            },
+            child: trainings.isEmpty
+                ? ListView(
+                    children: const [
+                      SizedBox(height: 120),
+                      Center(child: Text('No hay entrenamientos programados.')),
+                    ],
+                  )
+                : ListView.builder(
             itemCount: trainings.length,
             itemBuilder: (context, index) {
               final training = trainings[index];
@@ -114,6 +128,7 @@ class TrainingsScreen extends ConsumerWidget {
                 ),
               );
             },
+          ),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
