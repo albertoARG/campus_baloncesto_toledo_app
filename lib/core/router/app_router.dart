@@ -14,7 +14,6 @@ import 'package:campus_baloncesto_app/features/blog/presentation/views/blog_scre
 import 'package:campus_baloncesto_app/features/blog/presentation/views/create_blog_post_screen.dart';
 import 'package:campus_baloncesto_app/features/blog/presentation/views/blog_detail_screen.dart';
 import 'package:campus_baloncesto_app/features/blog/presentation/views/edit_blog_post_screen.dart';
-import 'package:campus_baloncesto_app/features/blog/data/models/blog_post_model.dart';
 import 'package:campus_baloncesto_app/features/profile/presentation/views/profile_screen.dart';
 import 'package:campus_baloncesto_app/features/groups/presentation/views/group_management_screen.dart';
 import 'package:campus_baloncesto_app/features/veladas/presentation/views/veladas_management_screen.dart';
@@ -27,6 +26,9 @@ import 'package:campus_baloncesto_app/features/siesta/presentation/views/siesta_
 import 'package:campus_baloncesto_app/features/siesta/presentation/views/siesta_participant_matches_screen.dart';
 import 'package:campus_baloncesto_app/features/siesta/presentation/views/siesta_participant_scores_screen.dart';
 import 'package:campus_baloncesto_app/features/trainings/presentation/views/trainings_screen.dart';
+import 'package:campus_baloncesto_app/features/matches/presentation/views/matches_screen.dart';
+import 'package:campus_baloncesto_app/features/matches/presentation/views/live_match_screen.dart';
+import 'package:campus_baloncesto_app/features/matches/presentation/views/match_teams_screen.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:go_router/go_router.dart';
@@ -167,6 +169,13 @@ final appRouter = GoRouter(
       builder: (context, state) => const TrainingsScreen(),
     ),
     GoRoute(path: '/stats', builder: (context, state) => const StatsScreen()),
+    GoRoute(path: '/matches', builder: (context, state) => const MatchesScreen()),
+    GoRoute(path: '/match-teams', builder: (context, state) => const MatchTeamsScreen()),
+    GoRoute(
+      path: '/matches/:id',
+      builder: (context, state) =>
+          LiveMatchScreen(matchId: state.pathParameters['id']!),
+    ),
   ],
   redirect: (context, state) {
     final session = Supabase.instance.client.auth.currentSession;
@@ -185,16 +194,3 @@ final appRouter = GoRouter(
     return null;
   },
 );
-
-// Temporary placeholder screen
-class PlaceholderHomeScreen extends StatelessWidget {
-  const PlaceholderHomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Campus Baloncesto')),
-      body: const Center(child: Text('Home Screen (Work in progress)')),
-    );
-  }
-}

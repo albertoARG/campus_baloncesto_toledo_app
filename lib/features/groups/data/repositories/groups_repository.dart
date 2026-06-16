@@ -7,22 +7,26 @@ class GroupsRepository {
 
   GroupsRepository(this._supabase);
 
-  // Obtener todos los grupos
+  // Obtener todos los grupos de COMPETICIÓN (excluye los equipos de partido)
   Future<List<GroupModel>> getGroups() async {
     final response = await _supabase
         .from('teams')
         .select()
+        .eq('is_match_team', false)
         .order('nombre', ascending: true);
     return (response as List).map((e) => GroupModel.fromJson(e)).toList();
   }
 
-  // Crear un nuevo grupo
-  Future<GroupModel> createGroup(String nombre, String? categoria) async {
+  // Crear un nuevo grupo. Si [isMatchTeam] es true se crea como equipo de
+  // partido (no aparece en la clasificación de competición).
+  Future<GroupModel> createGroup(String nombre, String? categoria,
+      {bool isMatchTeam = false}) async {
     final response = await _supabase.from('teams').insert({
       'nombre': nombre,
       'categoria': categoria,
+      'is_match_team': isMatchTeam,
     }).select().single();
-    
+
     return GroupModel.fromJson(response);
   }
 
@@ -60,8 +64,15 @@ class GroupsRepository {
         .eq('user_id', userId);
   }
 
-  // Generar equipos equilibrados automáticamente en función de edad, nivel y posición
-  Future<void> autoGenerateBalancedTeams(int numTeams, String prefix) async {
+  // Generar equipos equilibrados automáticamente en función de edad, nivel y posición.
+  // Si [isMatchTeam] es true, los equipos se crean como EQUIPOS DE PARTIDO: no
+  // cuentan en la clasificación de competición y no alteran los grupos de
+  // competición existentes (los jugadores conservan su grupo).
+  Future<void> autoGenerateBalancedTeams(
+    int numTeams,
+    String prefix, {
+    bool isMatchTeam = false,
+  }) async {
     if (numTeams <= 0) return;
 
     // 1. Obtener todos los jugadores (tanto estándar como premium)
@@ -101,21 +112,44 @@ class GroupsRepository {
     centers.sort((a, b) => getPlayerScore(b).compareTo(getPlayerScore(a)));
     forwards.sort((a, b) => getPlayerScore(b).compareTo(getPlayerScore(a)));
 
-    // 3. Crear los nuevos equipos en la base de datos
+    // 3. Si es modo "equipo de partido", borrar los equipos de partido anteriores
+    //    (y sus miembros) para no acumularlos. No se tocan los de competición.
+    if (isMatchTeam) {
+      final oldRes = await _supabase.from('teams').select('id').eq('is_match_team', true);
+      final oldIds = (oldRes as List).map((t) => t['id'] as String).toList();
+      if (oldIds.isNotEmpty) {
+        await _supabase.from('team_members').delete().inFilter('team_id', oldIds);
+        await _supabase.from('teams').delete().inFilter('id', oldIds);
+      }
+    }
+
+    // 4. Crear los nuevos equipos en la base de datos
     List<Map<String, dynamic>> teamsToInsert = [];
     for (int i = 0; i < numTeams; i++) {
       teamsToInsert.add({
         'nombre': '$prefix ${i + 1}',
+        'is_match_team': isMatchTeam,
       });
     }
 
     final createdTeams = await _supabase.from('teams').insert(teamsToInsert).select();
     final teamIds = (createdTeams as List).map((t) => t['id'] as String).toList();
 
-    // 4. Limpiar pertenencias a equipos antiguos de estos jugadores para evitar duplicados
+    // 5. Limpiar pertenencias previas para evitar duplicados.
+    //    - Competición: se borran solo las pertenencias a equipos de competición.
+    //    - Partido: no se toca nada de competición (los equipos de partido viejos
+    //      ya se eliminaron en el paso 3).
     final playerIds = players.map((p) => p.id).toList();
-    if (playerIds.isNotEmpty) {
-      await _supabase.from('team_members').delete().inFilter('user_id', playerIds);
+    if (!isMatchTeam && playerIds.isNotEmpty) {
+      final compRes = await _supabase.from('teams').select('id').eq('is_match_team', false);
+      final compIds = (compRes as List).map((t) => t['id'] as String).toList();
+      if (compIds.isNotEmpty) {
+        await _supabase
+            .from('team_members')
+            .delete()
+            .inFilter('user_id', playerIds)
+            .inFilter('team_id', compIds);
+      }
     }
 
     // Estructura para llevar la fuerza acumulada de cada equipo

@@ -366,6 +366,14 @@ class _AppDrawer extends ConsumerWidget {
               context.push('/trainings');
             },
           ),
+          _DrawerItem(
+            icon: Icons.scoreboard,
+            label: 'Partidos en Directo',
+            onTap: () {
+              Navigator.pop(context);
+              context.push('/matches');
+            },
+          ),
           if (role == 'admin' ||
               role == 'entrenador' ||
               role == 'jugador premium')
@@ -707,6 +715,12 @@ class _HomeBody extends ConsumerWidget {
             'https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=800&auto=format&fit=crop',
         title: 'ENTRENAMIENTOS',
         onTap: () => context.push('/trainings'),
+      ),
+      _ImageNavCard(
+        imageUrl:
+            'https://images.unsplash.com/photo-1519861531473-9200262188bf?q=80&w=800&auto=format&fit=crop',
+        title: 'PARTIDOS EN DIRECTO',
+        onTap: () => context.push('/matches'),
       ),
       if (isPremium)
         _ImageNavCard(

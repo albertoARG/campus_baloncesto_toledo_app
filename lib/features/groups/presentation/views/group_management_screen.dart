@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/groups_providers.dart';
+import '../../../matches/presentation/providers/matches_providers.dart';
 import 'group_detail_screen.dart';
 
 class GroupManagementScreen extends ConsumerWidget {
@@ -10,56 +11,78 @@ class GroupManagementScreen extends ConsumerWidget {
   void _showCreateGroupDialog(BuildContext context, WidgetRef ref) {
     final nameController = TextEditingController();
     final catController = TextEditingController();
+    bool esPartido = false;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Nuevo Grupo de Competición'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Nombre del grupo *'),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Nuevo Grupo'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Nombre *'),
+              ),
+              TextField(
+                controller: catController,
+                decoration: const InputDecoration(
+                    labelText: 'Categoría (Opcional, ej: Alevín)'),
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: esPartido,
+                onChanged: (v) => setState(() => esPartido = v),
+                title: const Text('Equipo de partido'),
+                subtitle: const Text(
+                  'No cuenta en la clasificación de competición',
+                  style: TextStyle(fontSize: 12),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
             ),
-            TextField(
-              controller: catController,
-              decoration: const InputDecoration(
-                  labelText: 'Categoría (Opcional, ej: Alevín)'),
+            ElevatedButton(
+              onPressed: () async {
+                if (nameController.text.trim().isEmpty) return;
+                try {
+                  await ref.read(groupsRepositoryProvider).createGroup(
+                        nameController.text.trim(),
+                        catController.text.trim().isEmpty
+                            ? null
+                            : catController.text.trim(),
+                        isMatchTeam: esPartido,
+                      );
+                  ref.invalidate(groupsProvider);
+                  if (esPartido) ref.invalidate(matchTeamsProvider);
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(esPartido
+                            ? 'Equipo de partido creado'
+                            : 'Grupo creado correctamente'),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+                    );
+                  }
+                }
+              },
+              child: const Text('Crear'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (nameController.text.trim().isEmpty) return;
-              try {
-                await ref.read(groupsRepositoryProvider).createGroup(
-                      nameController.text.trim(),
-                      catController.text.trim().isEmpty ? null : catController.text.trim(),
-                    );
-                ref.invalidate(groupsProvider);
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Grupo creado correctamente')),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-                  );
-                }
-              }
-            },
-            child: const Text('Crear'),
-          ),
-        ],
       ),
     );
   }
@@ -76,7 +99,7 @@ class GroupManagementScreen extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             const Text(
-              'Esto creará nuevos equipos y distribuirá automáticamente a todos los jugadores de forma equilibrada según su edad (snake draft).',
+              'Esto creará nuevos equipos de competición y distribuirá automáticamente a todos los jugadores de forma equilibrada según su edad (snake draft).',
               style: TextStyle(fontSize: 13),
             ),
             const SizedBox(height: 16),
@@ -110,7 +133,8 @@ class GroupManagementScreen extends ConsumerWidget {
                   builder: (c) => const Center(child: CircularProgressIndicator()),
                 );
 
-                await ref.read(groupsRepositoryProvider).autoGenerateBalancedTeams(numTeams, prefix);
+                await ref.read(groupsRepositoryProvider)
+                    .autoGenerateBalancedTeams(numTeams, prefix);
                 ref.invalidate(groupsProvider);
 
                 if (context.mounted) {

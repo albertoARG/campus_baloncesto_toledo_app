@@ -40,8 +40,12 @@ class ExportService {
       return a.nombre.compareTo(b.nombre);
     });
     
-    // 2. Get all groups
-    final groupsResponse = await _supabaseClient.from('teams').select().order('nombre');
+    // 2. Get all groups (solo de competición; excluye equipos de partido)
+    final groupsResponse = await _supabaseClient
+        .from('teams')
+        .select()
+        .eq('is_match_team', false)
+        .order('nombre');
     
     // 3. Keep all data in memory
     final globalRankings = await _competitionsRepo.getGlobalStandings();

@@ -66,3 +66,6 @@ memoria_tfg_*.docx
 /despliegue.png
 _memoria.txt
 base.md
+
+# Imágenes de diagramas de la memoria (solo en raíz, no en assets/)
+/*.png
