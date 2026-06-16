@@ -682,7 +682,9 @@ class _HomeBody extends ConsumerWidget {
 
     final widgets = <Widget>[
       _ImageNavCard(
-        imageUrl: 'assets/images/compet.png',
+        // imageUrl: 'assets/images/compet.png', // original del campus (recuperar si se desea)
+        imageUrl:
+            'https://images.unsplash.com/photo-1608245449230-4ac19066d2d0?q=80&w=800&auto=format&fit=crop',
         title: 'VER COMPETICIONES',
         onTap: () => context.push('/standings'),
         secondaryTitle: canManageScores ? 'AÑADIR PUNTUACIÓN' : null,
@@ -691,22 +693,30 @@ class _HomeBody extends ConsumerWidget {
             : null,
       ),
       _ImageNavCard(
-        imageUrl: 'assets/images/blog.jpg',
+        // imageUrl: 'assets/images/blog.jpg', // original del campus (recuperar si se desea)
+        imageUrl:
+            'https://images.unsplash.com/photo-1574623452334-1e0ac2b3ccb4?q=80&w=800&auto=format&fit=crop',
         title: 'BLOG DEL CAMPUS',
         onTap: () => context.push('/blog'),
       ),
       _ImageNavCard(
-        imageUrl: 'assets/images/siesta.jpg',
+        // imageUrl: 'assets/images/siesta.jpg', // original del campus (recuperar si se desea)
+        imageUrl:
+            'https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?q=80&w=800&auto=format&fit=crop',
         title: 'COMPES DE SIESTA',
         onTap: () => context.push('/siesta'),
       ),
       _ImageNavCard(
-        imageUrl: 'assets/images/veladas.jpg',
+        // imageUrl: 'assets/images/veladas.jpg', // original del campus (recuperar si se desea)
+        imageUrl:
+            'https://images.unsplash.com/photo-1505666287802-931dc83948e9?q=80&w=800&auto=format&fit=crop',
         title: 'VELADAS',
         onTap: () => context.push('/veladas'),
       ),
       _ImageNavCard(
-        imageUrl: 'assets/images/anuncio.jpg',
+        // imageUrl: 'assets/images/anuncio.jpg', // original del campus (recuperar si se desea)
+        imageUrl:
+            'https://images.unsplash.com/photo-1518063319789-7217e6706b04?q=80&w=800&auto=format&fit=crop',
         title: 'TABLÓN DE ANUNCIOS',
         onTap: () => context.push('/tablon'),
       ),

@@ -57,11 +57,18 @@ class ExportService {
        }
     }
     
-    // Map players to their teams
+    // Map players to their teams. Un jugador puede pertenecer a la vez a un grupo
+    // de competición y a un equipo de partido, así que solo consideramos los
+    // grupos de competición (los de groupsResponse) para no perder a nadie.
+    final Set<String> compTeamIds =
+        (groupsResponse as List).map((g) => g['id'] as String).toSet();
     final teamMembersResponse = await _supabaseClient.from('team_members').select('team_id, user_id');
     final Map<String, String> userToTeam = {};
     for(var row in teamMembersResponse as List) {
-      userToTeam[row['user_id']] = row['team_id'];
+      final teamId = row['team_id'] as String?;
+      if (teamId != null && compTeamIds.contains(teamId)) {
+        userToTeam[row['user_id']] = teamId;
+      }
     }
 
     // 4. Create Excel
@@ -70,6 +77,8 @@ class ExportService {
     CellStyle centerStyle = CellStyle(
       horizontalAlign: HorizontalAlign.Center,
       verticalAlign: VerticalAlign.Center,
+      // Formato de número entero (sin decimales) en las celdas de puntuación
+      numberFormat: const CustomNumericNumFormat(formatCode: '0'),
     );
     
     for (var group in groupsResponse as List) {

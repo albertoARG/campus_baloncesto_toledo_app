@@ -69,3 +69,6 @@ base.md
 
 # Imágenes de diagramas de la memoria (solo en raíz, no en assets/)
 /*.png
+
+# Esquema DBML de la memoria (no es parte de la app)
+*.dbml
