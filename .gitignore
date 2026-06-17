@@ -49,26 +49,4 @@ lib/core/constants/firebase_constants.dart
 android/app/google-services.json
 ios/Runner/GoogleService-Info.plist
 
-# Scripts SQL (solo uso local, no subir al repositorio)
-*.sql
 
-# Memoria del TFG: documentos y scripts de generacion (no forman parte de la app)
-generar_memoria.js
-diagramas.py
-gantt_tmp.py
-memoria_tfg_*.docx
-~$*.docx
-/diagrama_gantt.png
-/arquitectura.png
-/modelo_datos.png
-/casos_uso.png
-/navegacion.png
-/despliegue.png
-_memoria.txt
-base.md
-
-# Imágenes de diagramas de la memoria (solo en raíz, no en assets/)
-/*.png
-
-# Esquema DBML de la memoria (no es parte de la app)
-*.dbml
