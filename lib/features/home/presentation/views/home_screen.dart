@@ -682,9 +682,7 @@ class _HomeBody extends ConsumerWidget {
 
     final widgets = <Widget>[
       _ImageNavCard(
-        // imageUrl: 'assets/images/compet.png', // original del campus (recuperar si se desea)
-        imageUrl:
-            'https://images.unsplash.com/photo-1608245449230-4ac19066d2d0?q=80&w=800&auto=format&fit=crop',
+        imageUrl: 'assets/images/compet.png',
         title: 'VER COMPETICIONES',
         onTap: () => context.push('/standings'),
         secondaryTitle: canManageScores ? 'AÑADIR PUNTUACIÓN' : null,
@@ -693,42 +691,32 @@ class _HomeBody extends ConsumerWidget {
             : null,
       ),
       _ImageNavCard(
-        // imageUrl: 'assets/images/blog.jpg', // original del campus (recuperar si se desea)
-        imageUrl:
-            'https://images.unsplash.com/photo-1574623452334-1e0ac2b3ccb4?q=80&w=800&auto=format&fit=crop',
+        imageUrl: 'assets/images/blog.jpg',
         title: 'BLOG DEL CAMPUS',
         onTap: () => context.push('/blog'),
       ),
       _ImageNavCard(
-        // imageUrl: 'assets/images/siesta.jpg', // original del campus (recuperar si se desea)
-        imageUrl:
-            'https://images.unsplash.com/photo-1612872087720-bb876e2e67d1?q=80&w=800&auto=format&fit=crop',
+        imageUrl: 'assets/images/siesta.jpg',
         title: 'COMPES DE SIESTA',
         onTap: () => context.push('/siesta'),
       ),
       _ImageNavCard(
-        // imageUrl: 'assets/images/veladas.jpg', // original del campus (recuperar si se desea)
-        imageUrl:
-            'https://images.unsplash.com/photo-1505666287802-931dc83948e9?q=80&w=800&auto=format&fit=crop',
+        imageUrl: 'assets/images/veladas.jpg',
         title: 'VELADAS',
         onTap: () => context.push('/veladas'),
       ),
       _ImageNavCard(
-        // imageUrl: 'assets/images/anuncio.jpg', // original del campus (recuperar si se desea)
-        imageUrl:
-            'https://images.unsplash.com/photo-1518063319789-7217e6706b04?q=80&w=800&auto=format&fit=crop',
+        imageUrl: 'assets/images/anuncio.jpg',
         title: 'TABLÓN DE ANUNCIOS',
         onTap: () => context.push('/tablon'),
       ),
       _ImageNavCard(
-        imageUrl:
-            'https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=800&auto=format&fit=crop',
+        imageUrl: 'assets/images/entrenamientos.jpg',
         title: 'ENTRENAMIENTOS',
         onTap: () => context.push('/trainings'),
       ),
       _ImageNavCard(
-        imageUrl:
-            'https://images.unsplash.com/photo-1519861531473-9200262188bf?q=80&w=800&auto=format&fit=crop',
+        imageUrl: 'assets/images/partidos.jpg',
         title: 'PARTIDOS EN DIRECTO',
         onTap: () => context.push('/matches'),
       ),
