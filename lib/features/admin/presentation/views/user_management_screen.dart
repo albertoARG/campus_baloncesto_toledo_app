@@ -35,12 +35,21 @@ class UserManagementScreen extends ConsumerWidget {
             itemCount: users.length,
             itemBuilder: (context, index) {
             final user = users[index];
+            final detalles = <String>[
+              'Rol: ${user.role}',
+              if (user.posicion != null && user.posicion!.isNotEmpty) user.posicion!,
+              if (user.edad != null) '${user.edad} años',
+              if (user.nivel != null) 'Nivel ${user.nivel}',
+            ].join(' · ');
             return ListTile(
               leading: CircleAvatar(
-                child: Text(user.nombre[0].toUpperCase()),
+                child: Text(
+                  user.nombre.isNotEmpty ? user.nombre[0].toUpperCase() : '?',
+                ),
               ),
               title: Text('${user.nombre} ${user.apellidos}'),
-              subtitle: Text('Rol: ${user.role}'),
+              subtitle: Text(detalles),
+              onTap: () => context.push('/admin/users/edit', extra: user),
               trailing: PopupMenuButton<String>(
                 onSelected: (newRole) async {
                   try {

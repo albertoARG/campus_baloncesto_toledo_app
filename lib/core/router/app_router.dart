@@ -2,7 +2,9 @@ import 'package:campus_baloncesto_app/features/auth/presentation/views/sign_in_s
 import 'package:campus_baloncesto_app/features/auth/presentation/views/sign_up_screen.dart';
 import 'package:campus_baloncesto_app/features/home/presentation/views/home_screen.dart';
 import 'package:campus_baloncesto_app/features/admin/presentation/views/user_management_screen.dart';
+import 'package:campus_baloncesto_app/features/admin/presentation/views/edit_user_screen.dart';
 import 'package:campus_baloncesto_app/features/admin/presentation/views/admin_dashboard_screen.dart';
+import 'package:campus_baloncesto_app/core/models/user_model.dart';
 import 'package:campus_baloncesto_app/features/competitions/presentation/views/standings_screen.dart';
 import 'package:campus_baloncesto_app/features/competitions/presentation/views/add_score_screen.dart';
 import 'package:campus_baloncesto_app/features/competitions/presentation/views/station_management_screen.dart';
@@ -117,6 +119,11 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/admin/users',
       builder: (context, state) => const UserManagementScreen(),
+    ),
+    GoRoute(
+      path: '/admin/users/edit',
+      builder: (context, state) =>
+          EditUserScreen(user: state.extra as UserModel),
     ),
     GoRoute(
       path: '/admin/groups',
