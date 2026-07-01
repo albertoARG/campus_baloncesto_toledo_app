@@ -78,19 +78,28 @@ class BlogDetailScreen extends ConsumerWidget {
                   items: allImages.map((imgUrl) {
                     return Builder(
                       builder: (BuildContext context) {
-                        return Container(
-                          width: MediaQuery.of(context).size.width,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
-                          ),
-                          child: CachedNetworkImage(
-                            imageUrl: imgUrl,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => const Center(
-                              child: CircularProgressIndicator(),
+                        return GestureDetector(
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              fullscreenDialog: true,
+                              builder: (_) =>
+                                  _FullScreenImageViewer(imageUrl: imgUrl),
                             ),
-                            errorWidget: (context, url, error) =>
-                                const Icon(Icons.error),
+                          ),
+                          child: Container(
+                            width: MediaQuery.of(context).size.width,
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade200,
+                            ),
+                            child: CachedNetworkImage(
+                              imageUrl: imgUrl,
+                              fit: BoxFit.contain,
+                              placeholder: (context, url) => const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                              errorWidget: (context, url, error) =>
+                                  const Icon(Icons.error),
+                            ),
                           ),
                         );
                       },
@@ -164,6 +173,42 @@ class BlogDetailScreen extends ConsumerWidget {
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, s) => Scaffold(body: Center(child: Text('Error: $e'))),
+    );
+  }
+}
+
+class _FullScreenImageViewer extends StatelessWidget {
+  final String imageUrl;
+
+  const _FullScreenImageViewer({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      body: GestureDetector(
+        onTap: () => Navigator.of(context).pop(),
+        child: Center(
+          child: InteractiveViewer(
+            minScale: 1.0,
+            maxScale: 5.0,
+            child: CachedNetworkImage(
+              imageUrl: imageUrl,
+              fit: BoxFit.contain,
+              placeholder: (context, url) => const Center(
+                child: CircularProgressIndicator(),
+              ),
+              errorWidget: (context, url, error) =>
+                  const Icon(Icons.error, color: Colors.white),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
