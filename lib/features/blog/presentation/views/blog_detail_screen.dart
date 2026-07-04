@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:campus_baloncesto_app/core/services/cloudinary_service.dart';
 import 'package:campus_baloncesto_app/features/blog/data/models/blog_post_model.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../providers/blog_providers.dart';
@@ -92,7 +93,7 @@ class BlogDetailScreen extends ConsumerWidget {
                               color: Colors.grey.shade200,
                             ),
                             child: CachedNetworkImage(
-                              imageUrl: imgUrl,
+                              imageUrl: CloudinaryService.optimizedUrl(imgUrl),
                               fit: BoxFit.contain,
                               placeholder: (context, url) => const Center(
                                 child: CircularProgressIndicator(),
@@ -198,7 +199,7 @@ class _FullScreenImageViewer extends StatelessWidget {
             minScale: 1.0,
             maxScale: 5.0,
             child: CachedNetworkImage(
-              imageUrl: imageUrl,
+              imageUrl: CloudinaryService.optimizedUrl(imageUrl, width: 1600),
               fit: BoxFit.contain,
               placeholder: (context, url) => const Center(
                 child: CircularProgressIndicator(),

@@ -32,7 +32,12 @@ class _CreateBlogPostScreenState extends ConsumerState<CreateBlogPostScreen> {
 
   Future<void> _pickImage(ImageSource source) async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: source, imageQuality: 80);
+    final XFile? image = await picker.pickImage(
+      source: source,
+      imageQuality: 80,
+      maxWidth: 1920,
+      maxHeight: 1920,
+    );
     if (image != null) {
       setState(() {
         _selectedImage = image;
@@ -42,7 +47,11 @@ class _CreateBlogPostScreenState extends ConsumerState<CreateBlogPostScreen> {
 
   Future<void> _pickGalleryImages() async {
     final ImagePicker picker = ImagePicker();
-    final pickedList = await picker.pickMultiImage(imageQuality: 80);
+    final pickedList = await picker.pickMultiImage(
+      imageQuality: 80,
+      maxWidth: 1920,
+      maxHeight: 1920,
+    );
     if (pickedList.isNotEmpty) {
       setState(() {
         _galleryImages.addAll(pickedList);

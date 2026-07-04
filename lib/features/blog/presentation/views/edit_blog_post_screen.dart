@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../providers/blog_providers.dart';
+import '../../../../core/services/cloudinary_service.dart';
 import '../../../../features/blog/data/models/blog_post_model.dart';
 
 class EditBlogPostScreen extends ConsumerWidget {
@@ -72,7 +73,11 @@ class _EditBlogPostScreenInnerState extends ConsumerState<EditBlogPostScreenInne
 
   Future<void> _pickGalleryImages() async {
     try {
-      final List<XFile> pickedFiles = await _picker.pickMultiImage();
+      final List<XFile> pickedFiles = await _picker.pickMultiImage(
+        imageQuality: 80,
+        maxWidth: 1920,
+        maxHeight: 1920,
+      );
       if (pickedFiles.isNotEmpty) {
         setState(() {
           _newGalleryImages.addAll(pickedFiles);
@@ -177,7 +182,7 @@ class _EditBlogPostScreenInnerState extends ConsumerState<EditBlogPostScreenInne
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
                         child: CachedNetworkImage(
-                          imageUrl: widget.post.imageUrl,
+                          imageUrl: CloudinaryService.optimizedUrl(widget.post.imageUrl, width: 800),
                           height: 160,
                           width: double.infinity,
                           fit: BoxFit.cover,
@@ -265,7 +270,7 @@ class _EditBlogPostScreenInnerState extends ConsumerState<EditBlogPostScreenInne
                               final url = entry.value;
                               return _buildImageTile(
                                 child: CachedNetworkImage(
-                                  imageUrl: url,
+                                  imageUrl: CloudinaryService.optimizedUrl(url, width: 400),
                                   width: 100,
                                   height: 100,
                                   fit: BoxFit.cover,

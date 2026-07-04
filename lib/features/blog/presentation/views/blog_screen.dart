@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:campus_baloncesto_app/core/services/cloudinary_service.dart';
 import '../providers/blog_providers.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 
@@ -74,7 +75,7 @@ class _BlogScreenState extends ConsumerState<BlogScreen> {
                         Stack(
                           children: [
                             CachedNetworkImage(
-                              imageUrl: post.imageUrl,
+                              imageUrl: CloudinaryService.optimizedUrl(post.imageUrl, width: 800),
                               height: 200,
                               width: double.infinity,
                               fit: BoxFit.cover,

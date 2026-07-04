@@ -256,7 +256,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         CircleAvatar(
                           radius: 55,
                           backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-                          backgroundImage: user.fotoUrl != null ? NetworkImage(user.fotoUrl!) : null,
+                          backgroundImage: user.fotoUrl != null
+                              ? NetworkImage(CloudinaryService.optimizedUrl(user.fotoUrl!, width: 400))
+                              : null,
                           child: _isUploadingPhoto
                             ? const CircularProgressIndicator(color: Colors.white)
                             : user.fotoUrl == null 

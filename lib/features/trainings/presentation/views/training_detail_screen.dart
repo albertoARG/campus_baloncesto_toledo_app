@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/training_model.dart';
 import 'package:intl/intl.dart';
+import 'package:campus_baloncesto_app/core/services/cloudinary_service.dart';
 import 'package:campus_baloncesto_app/features/auth/presentation/providers/auth_providers.dart';
 import 'create_training_screen.dart';
 
@@ -35,7 +36,7 @@ class TrainingDetailScreen extends ConsumerWidget {
                   minScale: 0.5,
                   maxScale: 4,
                   child: Image.network(
-                    urls[index],
+                    CloudinaryService.optimizedUrl(urls[index], width: 1600),
                     fit: BoxFit.contain,
                     loadingBuilder: (context, child, loadingProgress) {
                       if (loadingProgress == null) return child;
@@ -154,7 +155,7 @@ class TrainingDetailScreen extends ConsumerWidget {
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(12),
                           child: Image.network(
-                            url,
+                            CloudinaryService.optimizedUrl(url, width: 800),
                             fit: BoxFit.cover,
                             loadingBuilder: (context, child, loadingProgress) {
                               if (loadingProgress == null) return child;

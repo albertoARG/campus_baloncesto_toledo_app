@@ -61,7 +61,11 @@ class _CreateTrainingScreenState extends ConsumerState<CreateTrainingScreen> {
 
   Future<void> _pickGalleryImages() async {
     final ImagePicker picker = ImagePicker();
-    final List<XFile> media = await picker.pickMultiImage(imageQuality: 80);
+    final List<XFile> media = await picker.pickMultiImage(
+      imageQuality: 80,
+      maxWidth: 1920,
+      maxHeight: 1920,
+    );
     if (media.isNotEmpty) {
       setState(() {
         _newMedia.addAll(media);
@@ -71,7 +75,12 @@ class _CreateTrainingScreenState extends ConsumerState<CreateTrainingScreen> {
 
   Future<void> _pickCameraImage() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? media = await picker.pickImage(source: ImageSource.camera, imageQuality: 80);
+    final XFile? media = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 80,
+      maxWidth: 1920,
+      maxHeight: 1920,
+    );
     if (media != null) {
       setState(() {
         _newMedia.add(media);
@@ -226,7 +235,7 @@ class _CreateTrainingScreenState extends ConsumerState<CreateTrainingScreen> {
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(8),
                                 image: DecorationImage(
-                                  image: NetworkImage(url),
+                                  image: NetworkImage(CloudinaryService.optimizedUrl(url, width: 400)),
                                   fit: BoxFit.cover,
                                 ),
                               ),

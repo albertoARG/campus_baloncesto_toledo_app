@@ -8,6 +8,7 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../tablon/presentation/providers/tablon_providers.dart';
 import '../../../blog/presentation/providers/blog_providers.dart';
 import '../../../../core/services/notification_service.dart';
+import '../../../../core/services/cloudinary_service.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -837,7 +838,7 @@ class _ImageNavCard extends StatelessWidget {
                 height: 160,
                 child: isNetwork
                     ? Image.network(
-                        imageUrl,
+                        CloudinaryService.optimizedUrl(imageUrl, width: 800),
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) => Container(
                           color: Colors.grey[300],
