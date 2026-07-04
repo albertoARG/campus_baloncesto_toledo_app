@@ -270,6 +270,7 @@ class _UserStationScoresScreenState
                                         scoreId,
                                         points,
                                         widget.userId,
+                                        score['station_day_id'] as String?,
                                       ),
                                     ),
                                     IconButton(
@@ -301,43 +302,73 @@ class _UserStationScoresScreenState
     );
   }
 
-  void _showEditDialog(
+  Future<void> _showEditDialog(
     BuildContext context,
     WidgetRef ref,
     String scoreId,
     int currentScore,
     String userId,
-  ) {
+    String? currentDayId,
+  ) async {
     final controller = TextEditingController(text: currentScore.toString());
+    final days = await ref.read(stationDaysProvider.future);
+    String? selectedDayId = currentDayId;
+    if (!context.mounted) return;
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Editar Puntuación'),
-        content: TextFormField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(labelText: 'Nueva Puntuación'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Editar Puntuación'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                decoration:
+                    const InputDecoration(labelText: 'Nueva Puntuación'),
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<String>(
+                decoration:
+                    const InputDecoration(labelText: 'Día de Competición'),
+                value: selectedDayId,
+                items: days
+                    .map((d) => DropdownMenuItem(
+                          value: d.id,
+                          child: Text(d.nombre),
+                        ))
+                    .toList(),
+                onChanged: (val) =>
+                    setDialogState(() => selectedDayId = val),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final newScore = int.tryParse(controller.text);
+                if (newScore != null) {
+                  await ref.read(competitionsRepositoryProvider).updateScore(
+                        scoreId,
+                        newScore,
+                        newDayId: selectedDayId != currentDayId
+                            ? selectedDayId
+                            : null,
+                      );
+                  ref.invalidate(userScoresProvider(userId));
+                  ref.invalidate(globalStandingsProvider);
+                  if (context.mounted) Navigator.pop(ctx);
+                }
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final newScore = int.tryParse(controller.text);
-              if (newScore != null) {
-                await ref
-                    .read(competitionsRepositoryProvider)
-                    .updateScore(scoreId, newScore);
-                ref.invalidate(userScoresProvider(userId));
-                ref.invalidate(globalStandingsProvider);
-                if (context.mounted) Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
       ),
     );
   }

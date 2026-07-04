@@ -41,10 +41,14 @@ class CompetitionsRepository {
     return List<Map<String, dynamic>>.from(response);
   }
 
-  Future<void> updateScore(String id, int newScore) async {
+  Future<void> updateScore(String id, int newScore, {String? newDayId}) async {
+    final data = <String, dynamic>{'score': newScore};
+    if (newDayId != null) {
+      data['station_day_id'] = newDayId;
+    }
     await _supabaseClient
         .from('station_scores')
-        .update({'score': newScore})
+        .update(data)
         .eq('id', id);
   }
 
@@ -76,14 +80,24 @@ class CompetitionsRepository {
           .toList();
     }
 
-    // 2. Get all scores
-    var query = _supabaseClient.from('station_scores').select('*, station_days!inner(is_published)').eq('station_days.is_published', true);
-    if (dayId != null) {
-      query = query.eq('station_day_id', dayId);
+    // 2. Get all scores. Supabase caps each request at 1000 rows, so we
+    // paginate until a page comes back short to make sure nothing is lost.
+    const pageSize = 1000;
+    final List<StationScoreModel> allScores = [];
+    var offset = 0;
+    while (true) {
+      var query = _supabaseClient
+          .from('station_scores')
+          .select('*, station_days!inner(is_published)')
+          .eq('station_days.is_published', true);
+      if (dayId != null) {
+        query = query.eq('station_day_id', dayId);
+      }
+      final page = await query.order('id', ascending: true).range(offset, offset + pageSize - 1);
+      allScores.addAll((page as List).map((j) => StationScoreModel.fromJson(j)));
+      if (page.length < pageSize) break;
+      offset += pageSize;
     }
-    final scoresResponse = await query;
-    
-    final allScores = (scoresResponse as List).map((j) => StationScoreModel.fromJson(j)).toList();
 
     // 3. Process rankings
     List<Map<String, dynamic>> rankings = [];
@@ -92,14 +106,18 @@ class CompetitionsRepository {
       final playerScores = allScores.where((s) => s.userId == player.id).toList();
       int totalScore = 0;
       
-      // Group by station
-      final Set<String> uniqueStations = playerScores.map((s) => s.stationId).toSet();
-      
-      for (var stationId in uniqueStations) {
-        final stationAttempts = playerScores.where((s) => s.stationId == stationId).toList();
+      // Group by station AND day: the same station can run on several days
+      // and each day contributes its own top-2 scores.
+      final Set<String> uniqueStationDays =
+          playerScores.map((s) => '${s.stationId}|${s.stationDayId}').toSet();
+
+      for (var stationDayKey in uniqueStationDays) {
+        final stationAttempts = playerScores
+            .where((s) => '${s.stationId}|${s.stationDayId}' == stationDayKey)
+            .toList();
         // Sort descending to get the best ones
         stationAttempts.sort((a, b) => b.score.compareTo(a.score));
-        
+
         // Take top 2 and sum
         final topAttempts = stationAttempts.take(2);
         for (var attempt in topAttempts) {

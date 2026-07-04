@@ -20,11 +20,14 @@ class _AddScoreScreenState extends ConsumerState<AddScoreScreen> {
   final _formKey = GlobalKey<FormState>();
   final _scoreController = TextEditingController();
 
+  static const int _maxPlayers = 5;
+
   StationDayModel? _selectedDay;
   StationModel? _selectedStation;
   String? _selectedGroupId;
-  UserModel? _selectedPlayer;
+  final List<UserModel> _selectedPlayers = [];
   bool _isLoading = false;
+  bool _dayAutoSelected = false;
 
   @override
   void dispose() {
@@ -32,15 +35,49 @@ class _AddScoreScreenState extends ConsumerState<AddScoreScreen> {
     super.dispose();
   }
 
+  bool _isSameDate(DateTime? a, DateTime b) {
+    return a != null && a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
   Future<void> _submitScore() async {
     if (!_formKey.currentState!.validate() ||
         _selectedDay == null ||
         _selectedStation == null ||
-        _selectedPlayer == null) {
+        _selectedPlayers.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Por favor, completa todos los campos')),
       );
       return;
+    }
+
+    // Si el día seleccionado no corresponde a la fecha de hoy, pedir confirmación.
+    if (!_isSameDate(_selectedDay!.fecha, DateTime.now())) {
+      final fecha = _selectedDay!.fecha;
+      final fechaTexto = fecha != null
+          ? ' (${fecha.day}/${fecha.month})'
+          : '';
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('¿Guardar en otro día?'),
+          content: Text(
+            'Estás registrando esta puntuación en "${_selectedDay!.nombre}"$fechaTexto, '
+            'que no corresponde al día de hoy.\n\n'
+            '¿Seguro que quieres guardarla en ese día?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Sí, guardar'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
     }
 
     setState(() => _isLoading = true);
@@ -52,24 +89,32 @@ class _AddScoreScreenState extends ConsumerState<AddScoreScreen> {
 
       // Enviar a supabase, nota: el ID lo genera la bbdd pero el modelo pide String.
       // Arreglado quitando id en toJson() si está vacío.
-      await repository.addScore(
-        StationScoreModel(
-          id: '',
-          userId: _selectedPlayer!.id,
-          coachId: coachId,
-          stationId: _selectedStation!.id,
-          stationDayId: _selectedDay!.id,
-          score: int.parse(_scoreController.text),
-          createdAt: DateTime.now(),
-        ),
-      );
+      final int score = int.parse(_scoreController.text);
+      final int playerCount = _selectedPlayers.length;
+      for (final player in _selectedPlayers) {
+        await repository.addScore(
+          StationScoreModel(
+            id: '',
+            userId: player.id,
+            coachId: coachId,
+            stationId: _selectedStation!.id,
+            stationDayId: _selectedDay!.id,
+            score: score,
+            createdAt: DateTime.now(),
+          ),
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Puntuación guardada correctamente')),
+          SnackBar(
+            content: Text(playerCount == 1
+                ? 'Puntuación guardada correctamente'
+                : 'Puntuación guardada para $playerCount jugadores'),
+          ),
         );
         _scoreController.clear();
-        _selectedPlayer = null;
+        _selectedPlayers.clear();
         setState(() {});
 
         // Refresh standings
@@ -113,7 +158,19 @@ class _AddScoreScreenState extends ConsumerState<AddScoreScreen> {
             children: [
               // Select Day
               daysAsync.when(
-                data: (days) => DropdownButtonFormField<StationDayModel>(
+                data: (days) {
+                  // Preseleccionar automáticamente el día cuya fecha es hoy.
+                  if (!_dayAutoSelected && _selectedDay == null) {
+                    _dayAutoSelected = true;
+                    final today = DateTime.now();
+                    for (final d in days) {
+                      if (_isSameDate(d.fecha, today)) {
+                        _selectedDay = d;
+                        break;
+                      }
+                    }
+                  }
+                  return DropdownButtonFormField<StationDayModel>(
                   decoration: const InputDecoration(
                     labelText: 'Día de Competición',
                   ),
@@ -126,7 +183,8 @@ class _AddScoreScreenState extends ConsumerState<AddScoreScreen> {
                       .toList(),
                   onChanged: (val) => setState(() => _selectedDay = val),
                   validator: (val) => val == null ? 'Selecciona un día' : null,
-                ),
+                );
+                },
                 loading: () => const CircularProgressIndicator(),
                 error: (e, s) => Text('Error: $e'),
               ),
@@ -166,7 +224,7 @@ class _AddScoreScreenState extends ConsumerState<AddScoreScreen> {
                   onChanged: (val) {
                     setState(() {
                       _selectedGroupId = val;
-                      _selectedPlayer = null; // Reset player when group changes
+                      _selectedPlayers.clear(); // Reset players when group changes
                     });
                   },
                 ),
@@ -175,7 +233,7 @@ class _AddScoreScreenState extends ConsumerState<AddScoreScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Select Player
+              // Select Players (hasta 5, misma puntuación para todos)
               playersAsync.when(
                 data: (players) {
                   // If a group is selected but somehow no players are in it, handle gracefully
@@ -188,28 +246,85 @@ class _AddScoreScreenState extends ConsumerState<AddScoreScreen> {
                         hint: const Text('No hay jugadores en este grupo'),
                      );
                   }
-                  
-                  // Ensure current _selectedPlayer is still in the list, otherwise null it
-                  if (_selectedPlayer != null && !players.any((p) => p.id == _selectedPlayer!.id)) {
+
+                  // Ensure selected players are still in the list (e.g. group changed)
+                  if (_selectedPlayers.any((sel) => !players.any((p) => p.id == sel.id))) {
                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) setState(() => _selectedPlayer = null);
+                        if (mounted) {
+                          setState(() => _selectedPlayers
+                              .removeWhere((sel) => !players.any((p) => p.id == sel.id)));
+                        }
                      });
                   }
 
-                  return DropdownButtonFormField<UserModel>(
-                    decoration: const InputDecoration(labelText: 'Jugador'),
-                    value: _selectedPlayer,
-                    items: players
-                        .map(
-                          (p) => DropdownMenuItem(
-                            value: p,
-                            child: Text('${p.nombre} ${p.apellidos}'),
+                  final available = players
+                      .where((p) => !_selectedPlayers.any((sel) => sel.id == p.id))
+                      .toList();
+                  final limitReached = _selectedPlayers.length >= _maxPlayers;
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      DropdownButtonFormField<UserModel>(
+                        key: ValueKey(_selectedPlayers.length),
+                        decoration: InputDecoration(
+                          labelText: _selectedPlayers.isEmpty
+                              ? 'Jugador'
+                              : 'Añadir otro jugador (${_selectedPlayers.length}/$_maxPlayers)',
+                        ),
+                        value: null,
+                        hint: Text(
+                          limitReached
+                              ? 'Máximo $_maxPlayers jugadores'
+                              : 'Selecciona un jugador',
+                        ),
+                        items: available
+                            .map(
+                              (p) => DropdownMenuItem(
+                                value: p,
+                                child: Text('${p.nombre} ${p.apellidos}'),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: limitReached
+                            ? null
+                            : (val) {
+                                if (val != null) {
+                                  setState(() => _selectedPlayers.add(val));
+                                }
+                              },
+                        validator: (_) => _selectedPlayers.isEmpty
+                            ? 'Selecciona al menos un jugador'
+                            : null,
+                      ),
+                      if (_selectedPlayers.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _selectedPlayers
+                              .map(
+                                (p) => Chip(
+                                  label: Text('${p.nombre} ${p.apellidos}'),
+                                  onDeleted: () => setState(
+                                      () => _selectedPlayers.remove(p)),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                        if (_selectedPlayers.length > 1)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              'Se guardará la misma puntuación para los ${_selectedPlayers.length} jugadores.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey.shade600,
+                              ),
+                            ),
                           ),
-                        )
-                        .toList(),
-                    onChanged: (val) => setState(() => _selectedPlayer = val),
-                    validator: (val) =>
-                        val == null ? 'Selecciona un jugador' : null,
+                      ],
+                    ],
                   );
                 },
                 loading: () => const CircularProgressIndicator(),
