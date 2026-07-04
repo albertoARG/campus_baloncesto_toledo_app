@@ -116,8 +116,8 @@ class SiestaBracketView extends ConsumerWidget {
                               (p) => p.id == m.participant2Id,
                               orElse: () => participants.first,
                             );
-                            final p1Name = p1.user != null ? '${p1.user!.nombre} ${p1.user!.apellidos}' : 'P1';
-                            final p2Name = p2.user != null ? '${p2.user!.nombre} ${p2.user!.apellidos}' : 'P2';
+                            final p1Name = p1.displayName;
+                            final p2Name = p2.displayName;
                             final isFinished = m.estado == 'finalizado';
 
                             return Card(

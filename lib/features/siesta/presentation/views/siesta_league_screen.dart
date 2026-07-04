@@ -253,7 +253,7 @@ class _SiestaLeagueScreenState extends ConsumerState<SiestaLeagueScreen> {
                                 final pos = entry.key + 1;
                                 final participant = entry.value;
                                 final user = participant.user;
-                                final name = user != null ? '${user.nombre} ${user.apellidos}' : 'Desconocido';
+                                final name = participant.displayName;
                                 
                                 return ListTile(
                                   leading: CircleAvatar(

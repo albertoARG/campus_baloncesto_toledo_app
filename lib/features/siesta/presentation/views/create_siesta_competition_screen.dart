@@ -18,7 +18,7 @@ class _CreateSiestaCompetitionScreenState extends ConsumerState<CreateSiestaComp
   String _selectedFormato = 'grupos_playoffs';
   bool _isLoading = false;
 
-  final List<String> _juegos = ['Ping Pong', 'Billar', 'Bolos', 'Tiro a canasta', 'Futbolín', 'Otro'];
+  final List<String> _juegos = ['Ping Pong', 'Billar', 'Bolos', 'Tiro a canasta', 'Futbolín', 'Mus', 'Otro'];
   final Map<String, String> _formatos = {
     'grupos_playoffs': 'Grupos + Playoffs',
     'liga': 'Liga (Todos contra todos)',

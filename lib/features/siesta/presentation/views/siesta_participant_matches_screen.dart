@@ -39,7 +39,7 @@ class _SiestaParticipantMatchesScreenState extends ConsumerState<SiestaParticipa
     if (participantsAsync.hasValue) {
       try {
         final p = participantsAsync.value!.firstWhere((p) => p.id == widget.participantId);
-        participantName = p.user != null ? '${p.user!.nombre} ${p.user!.apellidos}' : 'Jugador';
+        participantName = p.displayName;
       } catch (e) {
         participantName = 'Participante desconocido';
       }
@@ -107,8 +107,8 @@ class _SiestaParticipantMatchesScreenState extends ConsumerState<SiestaParticipa
                   final p1 = participants.firstWhere((p) => p.id == match.participant1Id, orElse: () => participants.first);
                   final p2 = participants.firstWhere((p) => p.id == match.participant2Id, orElse: () => participants.first);
                   
-                  final p1Name = p1.user != null ? '${p1.user!.nombre} ${p1.user!.apellidos}' : 'P1';
-                  final p2Name = p2.user != null ? '${p2.user!.nombre} ${p2.user!.apellidos}' : 'P2';
+                  final p1Name = p1.displayName;
+                  final p2Name = p2.displayName;
                   
                   final isFinished = match.estado == 'finalizado';
                   

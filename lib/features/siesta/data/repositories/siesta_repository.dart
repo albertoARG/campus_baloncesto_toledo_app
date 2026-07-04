@@ -36,16 +36,20 @@ class SiestaRepository {
   Future<List<SiestaParticipantModel>> getParticipants(String competitionId) async {
     final response = await _supabaseClient
         .from('siesta_participants')
-        .select('*, users(*)')
+        .select(
+          '*, users!siesta_participants_user_id_fkey(*), partner:users!siesta_participants_partner_user_id_fkey(*)',
+        )
         .eq('competition_id', competitionId)
         .order('puntos_liga', ascending: false);
     return (response as List).map((j) => SiestaParticipantModel.fromJson(j)).toList();
   }
 
-  Future<void> addParticipant(String competitionId, String userId, {String? grupo}) async {
+  Future<void> addParticipant(String competitionId, String userId,
+      {String? partnerUserId, String? grupo}) async {
     await _supabaseClient.from('siesta_participants').insert({
       'competition_id': competitionId,
       'user_id': userId,
+      'partner_user_id': partnerUserId,
       'grupo': grupo,
     });
   }

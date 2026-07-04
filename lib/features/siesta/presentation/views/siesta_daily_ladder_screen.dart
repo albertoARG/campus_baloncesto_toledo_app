@@ -119,7 +119,7 @@ class _SiestaDailyLadderScreenState extends ConsumerState<SiestaDailyLadderScree
             itemBuilder: (context, index) {
               final participant = sortedParticipants[index];
               final user = participant.user;
-              final name = user != null ? '${user.nombre} ${user.apellidos}' : 'Desconocido';
+              final name = participant.displayName;
               
               return ListTile(
                 leading: CircleAvatar(

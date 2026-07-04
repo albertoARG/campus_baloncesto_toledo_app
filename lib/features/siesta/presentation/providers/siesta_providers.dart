@@ -52,12 +52,13 @@ final siestaDailyScoresProvider =
     });
 
 // ALL PLAYERS (For Admins to assign to competition)
+// Incluye tambien entrenadores: en algunos juegos (p.ej. mus) participan.
 final allPlayersSiestaProvider = FutureProvider<List<UserModel>>((ref) async {
   final supabase = ref.watch(supabaseClientProvider);
   final response = await supabase
       .from('users')
       .select()
-      .eq('role', 'jugador')
+      .inFilter('role', ['jugador', 'entrenador'])
       .order('nombre');
   return (response as List).map((j) => UserModel.fromJson(j)).toList();
 });

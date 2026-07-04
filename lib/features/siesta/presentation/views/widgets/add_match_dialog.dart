@@ -95,7 +95,7 @@ class _AddMatchDialogState extends ConsumerState<AddMatchDialog> {
                     value: _selectedP1Id,
                     items: participants.map((p) => DropdownMenuItem(
                       value: p.id,
-                      child: Text(p.user != null ? '${p.user!.nombre} ${p.user!.apellidos}' : 'Jugador Desconocido'),
+                      child: Text(p.displayName),
                     )).toList(),
                     onChanged: (val) => setState(() => _selectedP1Id = val),
                   ),
@@ -107,7 +107,7 @@ class _AddMatchDialogState extends ConsumerState<AddMatchDialog> {
                     value: _selectedP2Id,
                     items: participants.map((p) => DropdownMenuItem(
                       value: p.id,
-                      child: Text(p.user != null ? '${p.user!.nombre} ${p.user!.apellidos}' : 'Jugador Desconocido'),
+                      child: Text(p.displayName),
                     )).toList(),
                     onChanged: (val) => setState(() => _selectedP2Id = val),
                   ),

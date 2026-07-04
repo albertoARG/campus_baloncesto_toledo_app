@@ -117,9 +117,7 @@ class SiestaExportService {
               for (var i = 0; i < sorted.length; i++)
                 [
                   '${i + 1}',
-                  sorted[i].user != null
-                      ? '${sorted[i].user!.nombre} ${sorted[i].user!.apellidos}'
-                      : 'Desconocido',
+                  sorted[i].displayName,
                   '${sorted[i].puntosLiga}',
                 ],
             ],
@@ -303,9 +301,7 @@ class SiestaExportService {
     final rows = <pw.TableRow>[_headerRow(headers)];
     for (var i = 0; i < participants.length; i++) {
       final p = participants[i];
-      final name = p.user != null
-          ? '${p.user!.nombre} ${p.user!.apellidos}'
-          : 'Desconocido';
+      final name = p.displayName;
       rows.add(
         _dataRow(
           [
@@ -461,12 +457,8 @@ class SiestaExportService {
           children: matches.map((m) {
             final p1 = participantById[m.participant1Id];
             final p2 = participantById[m.participant2Id];
-            final p1Name = p1?.user != null
-                ? '${p1!.user!.nombre} ${p1.user!.apellidos}'
-                : 'P1';
-            final p2Name = p2?.user != null
-                ? '${p2!.user!.nombre} ${p2.user!.apellidos}'
-                : 'P2';
+            final p1Name = p1?.displayName ?? 'P1';
+            final p2Name = p2?.displayName ?? 'P2';
             final finished = m.estado == 'finalizado';
             final p1Won = finished && m.score1 > m.score2;
             final p2Won = finished && m.score2 > m.score1;

@@ -92,8 +92,8 @@ class _UpdateMatchScoreDialogState extends ConsumerState<UpdateMatchScoreDialog>
         data: (participants) {
           final p1 = participants.firstWhere((p) => p.id == widget.match.participant1Id);
           final p2 = participants.firstWhere((p) => p.id == widget.match.participant2Id);
-          final p1Name = p1.user != null ? p1.user!.nombre : 'P1';
-          final p2Name = p2.user != null ? p2.user!.nombre : 'P2';
+          final p1Name = p1.shortDisplayName;
+          final p2Name = p2.shortDisplayName;
 
           return SingleChildScrollView(
             child: Form(

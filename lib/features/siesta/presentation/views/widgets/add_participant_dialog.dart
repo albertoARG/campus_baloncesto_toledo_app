@@ -14,6 +14,7 @@ class _AddParticipantDialogState extends ConsumerState<AddParticipantDialog> {
   final _formKey = GlobalKey<FormState>();
   final _grupoController = TextEditingController();
   String? _selectedUserId;
+  String? _selectedPartnerId;
   bool _isLoading = false;
 
   @override
@@ -28,6 +29,11 @@ class _AddParticipantDialogState extends ConsumerState<AddParticipantDialog> {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selecciona un jugador')));
       return;
     }
+    if (_selectedPartnerId != null && _selectedPartnerId == _selectedUserId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('La pareja no puede ser el mismo jugador')));
+      return;
+    }
 
     setState(() => _isLoading = true);
     try {
@@ -36,6 +42,7 @@ class _AddParticipantDialogState extends ConsumerState<AddParticipantDialog> {
       await repository.addParticipant(
         widget.competitionId,
         _selectedUserId!,
+        partnerUserId: _selectedPartnerId,
         grupo: grupo.isEmpty ? null : grupo,
       );
       
@@ -61,18 +68,50 @@ class _AddParticipantDialogState extends ConsumerState<AddParticipantDialog> {
           children: [
             playersAsync.when(
               data: (players) {
-                return DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'Jugador', border: OutlineInputBorder()),
-                  value: _selectedUserId,
-                  items: players.map((p) => DropdownMenuItem(
-                    value: p.id,
-                    child: Text(
-                      '${p.nombre} ${p.apellidos}',
-                      overflow: TextOverflow.ellipsis,
+                String label(dynamic p) =>
+                    '${p.nombre} ${p.apellidos}${p.role == 'entrenador' ? ' (entrenador)' : ''}';
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      decoration: const InputDecoration(labelText: 'Jugador', border: OutlineInputBorder()),
+                      value: _selectedUserId,
+                      items: players.map((p) => DropdownMenuItem(
+                        value: p.id,
+                        child: Text(
+                          label(p),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      )).toList(),
+                      onChanged: (val) => setState(() => _selectedUserId = val),
                     ),
-                  )).toList(),
-                  onChanged: (val) => setState(() => _selectedUserId = val),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String?>(
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Pareja (opcional, ej: mus o futbolín)',
+                        border: OutlineInputBorder(),
+                      ),
+                      value: _selectedPartnerId,
+                      items: [
+                        const DropdownMenuItem<String?>(
+                          value: null,
+                          child: Text('Sin pareja (individual)'),
+                        ),
+                        ...players
+                            .where((p) => p.id != _selectedUserId)
+                            .map((p) => DropdownMenuItem<String?>(
+                                  value: p.id,
+                                  child: Text(
+                                    label(p),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                )),
+                      ],
+                      onChanged: (val) => setState(() => _selectedPartnerId = val),
+                    ),
+                  ],
                 );
               },
               loading: () => const CircularProgressIndicator(),
