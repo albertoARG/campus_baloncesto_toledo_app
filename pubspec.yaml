@@ -52,6 +52,8 @@ dependencies:
   firebase_core: ^4.7.0
   firebase_messaging: ^16.2.0
   googleapis_auth: ^2.3.0
+  file_picker: ^3.0.4
+  url_launcher: ^6.3.2
 
 dev_dependencies:
   flutter_test:

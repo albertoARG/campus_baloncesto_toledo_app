@@ -5,6 +5,7 @@ import '../providers/trainings_providers.dart';
 import 'package:campus_baloncesto_app/features/auth/presentation/providers/auth_providers.dart';
 import 'create_training_screen.dart';
 import 'training_detail_screen.dart';
+import 'training_plans_screen.dart';
 
 class TrainingsScreen extends ConsumerWidget {
   const TrainingsScreen({super.key});
@@ -24,6 +25,19 @@ class TrainingsScreen extends ConsumerWidget {
           onPressed: () => context.pop(),
         ),
         actions: [
+          if (canManage)
+            IconButton(
+              icon: const Icon(Icons.picture_as_pdf),
+              tooltip: 'Planificaciones (PDF)',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const TrainingPlansScreen(),
+                  ),
+                );
+              },
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualizar',
