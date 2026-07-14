@@ -9,13 +9,20 @@ import 'package:campus_baloncesto_app/features/blog/data/models/blog_post_model.
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../providers/blog_providers.dart';
 
-class BlogDetailScreen extends ConsumerWidget {
+class BlogDetailScreen extends ConsumerStatefulWidget {
   final String postId;
 
   const BlogDetailScreen({super.key, required this.postId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BlogDetailScreen> createState() => _BlogDetailScreenState();
+}
+
+class _BlogDetailScreenState extends ConsumerState<BlogDetailScreen> {
+  int _carouselIndex = 0;
+
+  @override
+  Widget build(BuildContext context) {
     final postsAsync = ref.watch(blogPostsProvider);
     final userProfileAsync = ref.watch(currentUserProfileProvider);
     final String userRole = userProfileAsync.value?.role ?? 'visitante';
@@ -24,7 +31,7 @@ class BlogDetailScreen extends ConsumerWidget {
     return postsAsync.when(
       data: (posts) {
         final latestPost = posts.firstWhere(
-          (p) => p.id == postId,
+          (p) => p.id == widget.postId,
           orElse: () => posts
               .first, // Fallback if not found, though realistically it should be
         );
@@ -78,6 +85,9 @@ class BlogDetailScreen extends ConsumerWidget {
                         viewportFraction: 1.0,
                         enableInfiniteScroll: allImages.length > 1,
                         autoPlay: allImages.length > 1,
+                        onPageChanged: (index, reason) {
+                          _carouselIndex = index;
+                        },
                       ),
                       items: allImages.map((imgUrl) {
                         return Builder(
@@ -118,8 +128,8 @@ class BlogDetailScreen extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(20),
                           child: InkWell(
                             borderRadius: BorderRadius.circular(20),
-                            onTap: () =>
-                                _openGrid(context, allImages),
+                            onTap: () => _openGrid(
+                                context, allImages, _carouselIndex),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 12, vertical: 8),
@@ -225,73 +235,114 @@ void _openViewer(BuildContext context, List<String> images, int initialIndex) {
   );
 }
 
-void _openGrid(BuildContext context, List<String> images) {
+void _openGrid(BuildContext context, List<String> images, int currentIndex) {
+  _showPhotoGrid(
+    context,
+    images,
+    currentIndex,
+    (index) => _openViewer(context, images, index),
+  );
+}
+
+void _showPhotoGrid(
+  BuildContext context,
+  List<String> images,
+  int currentIndex,
+  void Function(int index) onSelect,
+) {
   showModalBottomSheet(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.black87,
-    builder: (sheetCtx) => SafeArea(
-      child: SizedBox(
-        height: MediaQuery.of(sheetCtx).size.height * 0.75,
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Row(
-                children: [
-                  Text(
-                    'Fotos (${images.length})',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white),
-                    onPressed: () => Navigator.pop(sheetCtx),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: GridView.builder(
-                padding: const EdgeInsets.all(8),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3,
-                  crossAxisSpacing: 6,
-                  mainAxisSpacing: 6,
-                ),
-                itemCount: images.length,
-                itemBuilder: (ctx, index) {
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.pop(sheetCtx);
-                      _openViewer(context, images, index);
-                    },
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: CachedNetworkImage(
-                        imageUrl: CloudinaryService.optimizedUrl(
-                          images[index],
-                          width: 400,
-                        ),
-                        fit: BoxFit.cover,
-                        placeholder: (c, u) =>
-                            Container(color: Colors.grey.shade800),
-                        errorWidget: (c, u, e) =>
-                            const Icon(Icons.error, color: Colors.white),
+    builder: (sheetCtx) {
+      // Desplazar la cuadrícula hasta la fila donde está la foto actual.
+      final double sheetWidth = MediaQuery.of(sheetCtx).size.width;
+      final double cellSize = (sheetWidth - 16 - 12) / 3;
+      final double rowHeight = cellSize + 6;
+      final int currentRow = (currentIndex.clamp(0, images.length - 1)) ~/ 3;
+      final scrollController = ScrollController(
+        initialScrollOffset: currentRow * rowHeight,
+      );
+
+      return SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(sheetCtx).size.height * 0.75,
+          child: Column(
+            children: [
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  children: [
+                    Text(
+                      'Fotos (${images.length})',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  );
-                },
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.white),
+                      onPressed: () => Navigator.pop(sheetCtx),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              Expanded(
+                child: GridView.builder(
+                  controller: scrollController,
+                  padding: const EdgeInsets.all(8),
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 6,
+                    mainAxisSpacing: 6,
+                  ),
+                  itemCount: images.length,
+                  itemBuilder: (ctx, index) {
+                    final bool isCurrent = index == currentIndex;
+                    return GestureDetector(
+                      onTap: () {
+                        Navigator.pop(sheetCtx);
+                        onSelect(index);
+                      },
+                      child: Container(
+                        decoration: isCurrent
+                            ? BoxDecoration(
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: Colors.white,
+                                  width: 3,
+                                ),
+                              )
+                            : null,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(
+                              isCurrent ? 5 : 8),
+                          child: CachedNetworkImage(
+                            imageUrl: CloudinaryService.optimizedUrl(
+                              images[index],
+                              width: 400,
+                            ),
+                            fit: BoxFit.cover,
+                            placeholder: (c, u) =>
+                                Container(color: Colors.grey.shade800),
+                            errorWidget: (c, u, e) =>
+                                const Icon(Icons.error, color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    ),
+      );
+    },
   );
 }
 
@@ -341,46 +392,11 @@ class _FullScreenGalleryViewerState extends State<_FullScreenGalleryViewer> {
   }
 
   void _openGridFromViewer() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.black87,
-      builder: (sheetCtx) => SafeArea(
-        child: SizedBox(
-          height: MediaQuery.of(sheetCtx).size.height * 0.75,
-          child: GridView.builder(
-            padding: const EdgeInsets.all(8),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 3,
-              crossAxisSpacing: 6,
-              mainAxisSpacing: 6,
-            ),
-            itemCount: widget.images.length,
-            itemBuilder: (ctx, index) {
-              return GestureDetector(
-                onTap: () {
-                  Navigator.pop(sheetCtx);
-                  _pageController.jumpToPage(index);
-                },
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: CachedNetworkImage(
-                    imageUrl: CloudinaryService.optimizedUrl(
-                      widget.images[index],
-                      width: 400,
-                    ),
-                    fit: BoxFit.cover,
-                    placeholder: (c, u) =>
-                        Container(color: Colors.grey.shade800),
-                    errorWidget: (c, u, e) =>
-                        const Icon(Icons.error, color: Colors.white),
-                  ),
-                ),
-              );
-            },
-          ),
-        ),
-      ),
+    _showPhotoGrid(
+      context,
+      widget.images,
+      _currentIndex,
+      (index) => _pageController.jumpToPage(index),
     );
   }
 
