@@ -25,6 +25,17 @@ class CloudinaryService {
     return '${prefix}f_auto,q_auto,c_limit,w_$width/$rest';
   }
 
+  /// URL que fuerza la descarga del archivo original (fl_attachment hace
+  /// que el navegador lo guarde en vez de mostrarlo).
+  static String downloadUrl(String url) {
+    const marker = '/upload/';
+    if (!url.contains('res.cloudinary.com') || !url.contains(marker)) {
+      return url;
+    }
+    final idx = url.indexOf(marker);
+    return '${url.substring(0, idx + marker.length)}fl_attachment/${url.substring(idx + marker.length)}';
+  }
+
   Future<String?> uploadImage(XFile imageFile) async {
     final uri = Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/auto/upload');
     

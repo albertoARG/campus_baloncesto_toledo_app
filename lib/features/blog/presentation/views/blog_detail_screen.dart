@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:carousel_slider/carousel_slider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:campus_baloncesto_app/core/services/cloudinary_service.dart';
 import 'package:campus_baloncesto_app/features/blog/data/models/blog_post_model.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
@@ -68,44 +69,78 @@ class BlogDetailScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CarouselSlider(
-                  key: ValueKey(allImages.length),
-                  options: CarouselOptions(
-                    height: MediaQuery.of(context).size.height * 0.45,
-                    viewportFraction: 1.0,
-                    enableInfiniteScroll: allImages.length > 1,
-                    autoPlay: allImages.length > 1,
-                  ),
-                  items: allImages.map((imgUrl) {
-                    return Builder(
-                      builder: (BuildContext context) {
-                        return GestureDetector(
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              fullscreenDialog: true,
-                              builder: (_) =>
-                                  _FullScreenImageViewer(imageUrl: imgUrl),
-                            ),
-                          ),
-                          child: Container(
-                            width: MediaQuery.of(context).size.width,
-                            decoration: BoxDecoration(
-                              color: Colors.grey.shade200,
-                            ),
-                            child: CachedNetworkImage(
-                              imageUrl: CloudinaryService.optimizedUrl(imgUrl),
-                              fit: BoxFit.contain,
-                              placeholder: (context, url) => const Center(
-                                child: CircularProgressIndicator(),
+                Stack(
+                  children: [
+                    CarouselSlider(
+                      key: ValueKey(allImages.length),
+                      options: CarouselOptions(
+                        height: MediaQuery.of(context).size.height * 0.45,
+                        viewportFraction: 1.0,
+                        enableInfiniteScroll: allImages.length > 1,
+                        autoPlay: allImages.length > 1,
+                      ),
+                      items: allImages.map((imgUrl) {
+                        return Builder(
+                          builder: (BuildContext context) {
+                            return GestureDetector(
+                              onTap: () => _openViewer(
+                                context,
+                                allImages,
+                                allImages.indexOf(imgUrl),
                               ),
-                              errorWidget: (context, url, error) =>
-                                  const Icon(Icons.error),
+                              child: Container(
+                                width: MediaQuery.of(context).size.width,
+                                decoration: BoxDecoration(
+                                  color: Colors.grey.shade200,
+                                ),
+                                child: CachedNetworkImage(
+                                  imageUrl:
+                                      CloudinaryService.optimizedUrl(imgUrl),
+                                  fit: BoxFit.contain,
+                                  placeholder: (context, url) => const Center(
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                  errorWidget: (context, url, error) =>
+                                      const Icon(Icons.error),
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      }).toList(),
+                    ),
+                    if (allImages.length > 1)
+                      Positioned(
+                        right: 12,
+                        bottom: 12,
+                        child: Material(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(20),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: () =>
+                                _openGrid(context, allImages),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.grid_view,
+                                      color: Colors.white, size: 18),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '${allImages.length} fotos',
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 13),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        );
-                      },
-                    );
-                  }).toList(),
+                        ),
+                      ),
+                  ],
                 ),
                 Padding(
                   padding: const EdgeInsets.all(20.0),
@@ -178,10 +213,176 @@ class BlogDetailScreen extends ConsumerWidget {
   }
 }
 
-class _FullScreenImageViewer extends StatelessWidget {
-  final String imageUrl;
+void _openViewer(BuildContext context, List<String> images, int initialIndex) {
+  Navigator.of(context).push(
+    MaterialPageRoute(
+      fullscreenDialog: true,
+      builder: (_) => _FullScreenGalleryViewer(
+        images: images,
+        initialIndex: initialIndex < 0 ? 0 : initialIndex,
+      ),
+    ),
+  );
+}
 
-  const _FullScreenImageViewer({required this.imageUrl});
+void _openGrid(BuildContext context, List<String> images) {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.black87,
+    builder: (sheetCtx) => SafeArea(
+      child: SizedBox(
+        height: MediaQuery.of(sheetCtx).size.height * 0.75,
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  Text(
+                    'Fotos (${images.length})',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () => Navigator.pop(sheetCtx),
+                  ),
+                ],
+              ),
+            ),
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.all(8),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 3,
+                  crossAxisSpacing: 6,
+                  mainAxisSpacing: 6,
+                ),
+                itemCount: images.length,
+                itemBuilder: (ctx, index) {
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.pop(sheetCtx);
+                      _openViewer(context, images, index);
+                    },
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: CachedNetworkImage(
+                        imageUrl: CloudinaryService.optimizedUrl(
+                          images[index],
+                          width: 400,
+                        ),
+                        fit: BoxFit.cover,
+                        placeholder: (c, u) =>
+                            Container(color: Colors.grey.shade800),
+                        errorWidget: (c, u, e) =>
+                            const Icon(Icons.error, color: Colors.white),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _FullScreenGalleryViewer extends StatefulWidget {
+  final List<String> images;
+  final int initialIndex;
+
+  const _FullScreenGalleryViewer({
+    required this.images,
+    required this.initialIndex,
+  });
+
+  @override
+  State<_FullScreenGalleryViewer> createState() =>
+      _FullScreenGalleryViewerState();
+}
+
+class _FullScreenGalleryViewerState extends State<_FullScreenGalleryViewer> {
+  late final PageController _pageController;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _downloadCurrent() async {
+    final url = CloudinaryService.downloadUrl(widget.images[_currentIndex]);
+    final ok = await launchUrl(
+      Uri.parse(url),
+      mode: LaunchMode.externalApplication,
+      webOnlyWindowName: '_blank',
+    );
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo descargar la foto')),
+      );
+    }
+  }
+
+  void _openGridFromViewer() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.black87,
+      builder: (sheetCtx) => SafeArea(
+        child: SizedBox(
+          height: MediaQuery.of(sheetCtx).size.height * 0.75,
+          child: GridView.builder(
+            padding: const EdgeInsets.all(8),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 3,
+              crossAxisSpacing: 6,
+              mainAxisSpacing: 6,
+            ),
+            itemCount: widget.images.length,
+            itemBuilder: (ctx, index) {
+              return GestureDetector(
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _pageController.jumpToPage(index);
+                },
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: CachedNetworkImage(
+                    imageUrl: CloudinaryService.optimizedUrl(
+                      widget.images[index],
+                      width: 400,
+                    ),
+                    fit: BoxFit.cover,
+                    placeholder: (c, u) =>
+                        Container(color: Colors.grey.shade800),
+                    errorWidget: (c, u, e) =>
+                        const Icon(Icons.error, color: Colors.white),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -191,24 +392,52 @@ class _FullScreenImageViewer extends StatelessWidget {
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         elevation: 0,
-      ),
-      body: GestureDetector(
-        onTap: () => Navigator.of(context).pop(),
-        child: Center(
-          child: InteractiveViewer(
-            minScale: 1.0,
-            maxScale: 5.0,
-            child: CachedNetworkImage(
-              imageUrl: CloudinaryService.optimizedUrl(imageUrl, width: 1600),
-              fit: BoxFit.contain,
-              placeholder: (context, url) => const Center(
-                child: CircularProgressIndicator(),
-              ),
-              errorWidget: (context, url, error) =>
-                  const Icon(Icons.error, color: Colors.white),
-            ),
-          ),
+        title: Text(
+          '${_currentIndex + 1} / ${widget.images.length}',
+          style: const TextStyle(fontSize: 16),
         ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: 'Descargar foto',
+            onPressed: _downloadCurrent,
+          ),
+          if (widget.images.length > 1)
+            IconButton(
+              icon: const Icon(Icons.grid_view),
+              tooltip: 'Ver todas las fotos',
+              onPressed: _openGridFromViewer,
+            ),
+        ],
+      ),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.images.length,
+        onPageChanged: (index) => setState(() => _currentIndex = index),
+        itemBuilder: (context, index) {
+          return GestureDetector(
+            onTap: () => Navigator.of(context).pop(),
+            child: Center(
+              child: InteractiveViewer(
+                minScale: 1.0,
+                maxScale: 5.0,
+                child: CachedNetworkImage(
+                  imageUrl: CloudinaryService.optimizedUrl(
+                    widget.images[index],
+                    width: 1600,
+                  ),
+                  fit: BoxFit.contain,
+                  placeholder: (context, url) => const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                  errorWidget: (context, url, error) =>
+                      const Icon(Icons.error, color: Colors.white),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
