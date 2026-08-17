@@ -2,10 +2,47 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../providers/veladas_providers.dart';
+import '../../data/models/velada_model.dart';
 import 'velada_detail_screen.dart';
 
 class VeladasManagementScreen extends ConsumerWidget {
   const VeladasManagementScreen({super.key});
+
+  Future<void> _confirmDeleteVelada(
+      BuildContext context, WidgetRef ref, VeladaModel velada) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: const Text('Eliminar Velada'),
+        content: Text(
+            '¿Seguro que quieres borrar "${velada.nombre}" y todos sus grupos?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(c, false),
+              child: const Text('Cancelar')),
+          TextButton(
+              onPressed: () => Navigator.pop(c, true),
+              child:
+                  const Text('Eliminar', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await ref.read(veladasRepositoryProvider).deleteVelada(velada.id);
+      ref.invalidate(allVeladasProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Velada eliminada')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
+    }
+  }
 
   void _showCreateVeladaDialog(BuildContext context, WidgetRef ref) {
     final nameController = TextEditingController();
@@ -89,7 +126,27 @@ class VeladasManagementScreen extends ConsumerWidget {
                      leading: const Icon(Icons.nightlight_round, color: Colors.indigo),
                      title: Text(velada.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
                      subtitle: Text('Fecha: ${velada.fecha.day}/${velada.fecha.month}/${velada.fecha.year}'),
-                     trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                     trailing: PopupMenuButton<String>(
+                       icon: const Icon(Icons.more_vert),
+                       tooltip: 'Opciones',
+                       onSelected: (value) {
+                         if (value == 'delete') {
+                           _confirmDeleteVelada(context, ref, velada);
+                         }
+                       },
+                       itemBuilder: (context) => const [
+                         PopupMenuItem(
+                           value: 'delete',
+                           child: Row(
+                             children: [
+                               Icon(Icons.delete, color: Colors.red, size: 20),
+                               SizedBox(width: 8),
+                               Text('Eliminar'),
+                             ],
+                           ),
+                         ),
+                       ],
+                     ),
                      onTap: () {
                        Navigator.of(context).push(
                          MaterialPageRoute(builder: (_) => VeladaDetailScreen(velada: velada))

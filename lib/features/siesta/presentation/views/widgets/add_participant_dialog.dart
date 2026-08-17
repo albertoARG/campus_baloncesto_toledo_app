@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/siesta_providers.dart';
+import '../../../../../core/models/user_model.dart';
 
 class AddParticipantDialog extends ConsumerStatefulWidget {
   final String competitionId;
@@ -68,48 +69,91 @@ class _AddParticipantDialogState extends ConsumerState<AddParticipantDialog> {
           children: [
             playersAsync.when(
               data: (players) {
-                String label(dynamic p) =>
+                String label(UserModel p) =>
                     '${p.nombre} ${p.apellidos}${p.role == 'entrenador' ? ' (entrenador)' : ''}';
+                final sorted = [...players]..sort((a, b) =>
+                    '${a.nombre} ${a.apellidos}'.toLowerCase().compareTo(
+                        '${b.nombre} ${b.apellidos}'.toLowerCase()));
+
                 return Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    DropdownButtonFormField<String>(
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Jugador', border: OutlineInputBorder()),
-                      value: _selectedUserId,
-                      items: players.map((p) => DropdownMenuItem(
-                        value: p.id,
-                        child: Text(
-                          label(p),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      )).toList(),
-                      onChanged: (val) => setState(() => _selectedUserId = val),
+                    // Jugador principal (búsqueda escribiendo).
+                    Autocomplete<UserModel>(
+                      displayStringForOption: label,
+                      optionsBuilder: (value) {
+                        final q = value.text.trim().toLowerCase();
+                        if (q.isEmpty) return sorted;
+                        return sorted
+                            .where((p) => label(p).toLowerCase().contains(q));
+                      },
+                      onSelected: (p) =>
+                          setState(() => _selectedUserId = p.id),
+                      fieldViewBuilder:
+                          (context, controller, focusNode, _) {
+                        return TextFormField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: const InputDecoration(
+                            labelText: 'Jugador',
+                            hintText: 'Escribe un nombre…',
+                            prefixIcon: Icon(Icons.search),
+                            border: OutlineInputBorder(),
+                          ),
+                          onChanged: (text) {
+                            if (_selectedUserId != null) {
+                              final sel = sorted
+                                  .where((p) => p.id == _selectedUserId);
+                              if (sel.isEmpty || label(sel.first) != text) {
+                                setState(() => _selectedUserId = null);
+                              }
+                            }
+                          },
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
-                    DropdownButtonFormField<String?>(
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Pareja (opcional, ej: mus o futbolín)',
-                        border: OutlineInputBorder(),
-                      ),
-                      value: _selectedPartnerId,
-                      items: [
-                        const DropdownMenuItem<String?>(
-                          value: null,
-                          child: Text('Sin pareja (individual)'),
-                        ),
-                        ...players
-                            .where((p) => p.id != _selectedUserId)
-                            .map((p) => DropdownMenuItem<String?>(
-                                  value: p.id,
-                                  child: Text(
-                                    label(p),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                )),
-                      ],
-                      onChanged: (val) => setState(() => _selectedPartnerId = val),
+                    // Pareja opcional (mus / futbolín). Vacío = individual.
+                    Autocomplete<UserModel>(
+                      displayStringForOption: label,
+                      optionsBuilder: (value) {
+                        final q = value.text.trim().toLowerCase();
+                        final base =
+                            sorted.where((p) => p.id != _selectedUserId);
+                        if (q.isEmpty) return base;
+                        return base
+                            .where((p) => label(p).toLowerCase().contains(q));
+                      },
+                      onSelected: (p) =>
+                          setState(() => _selectedPartnerId = p.id),
+                      fieldViewBuilder:
+                          (context, controller, focusNode, _) {
+                        return TextFormField(
+                          controller: controller,
+                          focusNode: focusNode,
+                          decoration: const InputDecoration(
+                            labelText: 'Pareja (opcional: mus o futbolín)',
+                            hintText: 'Déjalo vacío si es individual',
+                            prefixIcon: Icon(Icons.search),
+                            border: OutlineInputBorder(),
+                          ),
+                          onChanged: (text) {
+                            if (text.trim().isEmpty) {
+                              if (_selectedPartnerId != null) {
+                                setState(() => _selectedPartnerId = null);
+                              }
+                              return;
+                            }
+                            if (_selectedPartnerId != null) {
+                              final sel = sorted
+                                  .where((p) => p.id == _selectedPartnerId);
+                              if (sel.isEmpty || label(sel.first) != text) {
+                                setState(() => _selectedPartnerId = null);
+                              }
+                            }
+                          },
+                        );
+                      },
                     ),
                   ],
                 );

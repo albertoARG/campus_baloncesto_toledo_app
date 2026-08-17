@@ -4,10 +4,11 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/models/user_model.dart';
 import '../providers/admin_providers.dart';
 
-/// Pantalla para que un administrador edite los datos de otro jugador.
+/// Pantalla para crear un jugador nuevo (user == null) o editar los datos de
+/// uno existente (user != null).
 class EditUserScreen extends ConsumerStatefulWidget {
-  final UserModel user;
-  const EditUserScreen({super.key, required this.user});
+  final UserModel? user;
+  const EditUserScreen({super.key, this.user});
 
   @override
   ConsumerState<EditUserScreen> createState() => _EditUserScreenState();
@@ -23,16 +24,18 @@ class _EditUserScreenState extends ConsumerState<EditUserScreen> {
   int? _nivel;
   bool _isSaving = false;
 
+  bool get _isNew => widget.user == null;
+
   @override
   void initState() {
     super.initState();
     final u = widget.user;
-    _nombreController = TextEditingController(text: u.nombre);
-    _apellidosController = TextEditingController(text: u.apellidos);
-    _posicionController = TextEditingController(text: u.posicion ?? '');
-    _estaturaController = TextEditingController(text: u.estatura?.toString() ?? '');
-    _edadController = TextEditingController(text: u.edad?.toString() ?? '');
-    _nivel = u.nivel;
+    _nombreController = TextEditingController(text: u?.nombre ?? '');
+    _apellidosController = TextEditingController(text: u?.apellidos ?? '');
+    _posicionController = TextEditingController(text: u?.posicion ?? '');
+    _estaturaController = TextEditingController(text: u?.estatura?.toString() ?? '');
+    _edadController = TextEditingController(text: u?.edad?.toString() ?? '');
+    _nivel = u?.nivel ?? 3;
   }
 
   @override
@@ -49,25 +52,45 @@ class _EditUserScreenState extends ConsumerState<EditUserScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
     try {
-      await ref.read(adminRepositoryProvider).updateUserData(
-            widget.user.id,
-            nombre: _nombreController.text.trim(),
-            apellidos: _apellidosController.text.trim(),
-            posicion: _posicionController.text.trim().isEmpty
-                ? null
-                : _posicionController.text.trim(),
-            estatura: _estaturaController.text.trim().isEmpty
-                ? null
-                : double.tryParse(_estaturaController.text.trim()),
-            edad: _edadController.text.trim().isEmpty
-                ? null
-                : int.tryParse(_edadController.text.trim()),
-            nivel: _nivel,
-          );
+      final repo = ref.read(adminRepositoryProvider);
+      final nombre = _nombreController.text.trim();
+      final apellidos = _apellidosController.text.trim();
+      final posicion = _posicionController.text.trim().isEmpty
+          ? null
+          : _posicionController.text.trim();
+      final estatura = _estaturaController.text.trim().isEmpty
+          ? null
+          : double.tryParse(_estaturaController.text.trim());
+      final edad = _edadController.text.trim().isEmpty
+          ? null
+          : int.tryParse(_edadController.text.trim());
+
+      if (_isNew) {
+        await repo.createPlayer(
+          nombre: nombre,
+          apellidos: apellidos,
+          posicion: posicion,
+          estatura: estatura,
+          edad: edad,
+          nivel: _nivel,
+        );
+      } else {
+        await repo.updateUserData(
+          widget.user!.id,
+          nombre: nombre,
+          apellidos: apellidos,
+          posicion: posicion,
+          estatura: estatura,
+          edad: edad,
+          nivel: _nivel,
+        );
+      }
       ref.invalidate(allUsersProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Datos del jugador actualizados')),
+          SnackBar(
+              content: Text(
+                  _isNew ? 'Jugador creado' : 'Datos del jugador actualizados')),
         );
         context.pop();
       }
@@ -89,7 +112,7 @@ class _EditUserScreenState extends ConsumerState<EditUserScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Editar jugador'),
+        title: Text(_isNew ? 'Nuevo jugador' : 'Editar jugador'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.pop(),
@@ -102,13 +125,15 @@ class _EditUserScreenState extends ConsumerState<EditUserScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                '${widget.user.nombre} ${widget.user.apellidos}',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              Text('Rol: ${widget.user.role}',
-                  style: Theme.of(context).textTheme.bodySmall),
-              const SizedBox(height: 20),
+              if (!_isNew) ...[
+                Text(
+                  '${widget.user!.nombre} ${widget.user!.apellidos}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                Text('Rol: ${widget.user!.role}',
+                    style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(height: 20),
+              ],
               TextFormField(
                 controller: _nombreController,
                 decoration: const InputDecoration(
@@ -199,7 +224,9 @@ class _EditUserScreenState extends ConsumerState<EditUserScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.save),
-                  label: Text(_isSaving ? 'Guardando...' : 'Guardar cambios'),
+                  label: Text(_isSaving
+                      ? 'Guardando...'
+                      : (_isNew ? 'Crear jugador' : 'Guardar cambios')),
                 ),
               ),
             ],

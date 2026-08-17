@@ -1,22 +1,53 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:confetti/confetti.dart';
 import '../../../../core/models/user_model.dart';
 import '../providers/competitions_providers.dart';
 import '../../../groups/presentation/providers/groups_providers.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/services/export_service.dart';
+import '../../../../core/widgets/skeleton.dart';
 
-class StandingsScreen extends ConsumerWidget {
+class StandingsScreen extends ConsumerStatefulWidget {
   const StandingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<StandingsScreen> createState() => _StandingsScreenState();
+}
+
+class _StandingsScreenState extends ConsumerState<StandingsScreen> {
+  late final ConfettiController _confetti;
+  bool _confettiPlayed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _confetti = ConfettiController(duration: const Duration(seconds: 2));
+  }
+
+  @override
+  void dispose() {
+    _confetti.dispose();
+    super.dispose();
+  }
+
+  // Lanza el confeti una sola vez, cuando ya hay podio que celebrar.
+  void _celebratePodium(int count) {
+    if (_confettiPlayed || count == 0) return;
+    _confettiPlayed = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _confetti.play();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final selectedGroupId = ref.watch(selectedGroupIdProvider);
     final selectedDayId = ref.watch(selectedDayIdProvider);
     final standingsAsync = ref.watch(globalStandingsProvider);
     final groupsAsync = ref.watch(groupsProvider);
-    final daysAsync = ref.watch(stationDaysProvider);
+    final daysAsync = ref.watch(visibleStationDaysProvider);
     final userProfileAsync = ref.watch(currentUserProfileProvider);
     final String userRole = userProfileAsync.value?.role ?? 'visitante';
     final isAdminOrCoach = userRole == 'admin' || userRole == 'entrenador';
@@ -167,96 +198,143 @@ class StandingsScreen extends ConsumerWidget {
           ),
         ),
       ),
-      body: standingsAsync.when(
-        data: (rankings) {
-          if (rankings.isEmpty) {
-            return const Center(
-              child: Text('Aún no hay puntuaciones registradas.'),
-            );
-          }
+      body: Stack(
+        children: [
+          standingsAsync.when(
+            data: (rankings) {
+              if (rankings.isEmpty) {
+                return const Center(
+                  child: Text('Aún no hay puntuaciones registradas.'),
+                );
+              }
+              _celebratePodium(rankings.length);
 
-          return ListView.builder(
-            itemCount: rankings.length,
-            itemBuilder: (context, index) {
-              final ranking = rankings[index];
-              final UserModel player = ranking['player'];
-              final int totalScore = ranking['totalScore'];
+              return ListView.builder(
+                itemCount: rankings.length,
+                itemBuilder: (context, index) {
+                  final ranking = rankings[index];
+                  final UserModel player = ranking['player'];
+                  final int totalScore = ranking['totalScore'];
 
-              // Medal colors for top 3
-              Color? iconColor;
-              if (index == 0)
-                iconColor = Colors.amber; // Gold
-              else if (index == 1)
-                iconColor = Colors.grey[400]; // Silver
-              else if (index == 2)
-                iconColor = Colors.brown[300]; // Bronze
+                  // Medal colors for top 3
+                  Color? iconColor;
+                  if (index == 0)
+                    iconColor = Colors.amber; // Gold
+                  else if (index == 1)
+                    iconColor = Colors.grey[400]; // Silver
+                  else if (index == 2)
+                    iconColor = Colors.brown[300]; // Bronze
 
-              return Card(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                elevation: index < 3 ? 4 : 1,
-                child: InkWell(
-                  onTap: isAdminOrCoach ? () {
-                    context.push(
-                      '/competitions/user/${player.id}',
-                      extra: '${player.nombre} ${player.apellidos}',
-                    );
-                  } : null,
-                  borderRadius: BorderRadius.circular(12),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor:
-                          iconColor ??
-                          Theme.of(
-                            context,
-                          ).colorScheme.primary.withValues(alpha: 0.1),
-                      child: Text(
-                        '${index + 1}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: index < 3
-                              ? Colors.white
-                              : Theme.of(context).colorScheme.primary,
-                        ),
+                  return TweenAnimationBuilder<double>(
+                    key: ValueKey(player.id),
+                    tween: Tween(begin: 0.0, end: 1.0),
+                    duration: Duration(
+                      milliseconds: 250 + (index.clamp(0, 15)) * 45,
+                    ),
+                    curve: Curves.easeOut,
+                    builder: (context, t, child) => Opacity(
+                      opacity: t.clamp(0.0, 1.0),
+                      child: Transform.translate(
+                        offset: Offset(0, 18 * (1 - t)),
+                        child: child,
                       ),
                     ),
-                    title: Text(
-                      '${player.nombre} ${player.apellidos}',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(player.posicion ?? 'Jugador'),
-                        if (isAdminOrCoach) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            'Toca para ver historial',
+                    child: Card(
+                      margin: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      elevation: index < 3 ? 4 : 1,
+                      child: InkWell(
+                        onTap: isAdminOrCoach
+                            ? () {
+                                context.push(
+                                  '/competitions/user/${player.id}',
+                                  extra: '${player.nombre} ${player.apellidos}',
+                                );
+                              }
+                            : null,
+                        borderRadius: BorderRadius.circular(12),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor:
+                                iconColor ??
+                                Theme.of(
+                                  context,
+                                ).colorScheme.primary.withValues(alpha: 0.1),
+                            child: Text(
+                              '${index + 1}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: index < 3
+                                    ? Colors.white
+                                    : Theme.of(context).colorScheme.primary,
+                              ),
+                            ),
+                          ),
+                          title: Text(
+                            '${player.nombre} ${player.apellidos}',
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(player.posicion ?? 'Jugador'),
+                              if (isAdminOrCoach) ...[
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Toca para ver historial',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          trailing: Text(
+                            '$totalScore pts',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
                               color: Theme.of(context).colorScheme.primary,
                             ),
                           ),
-                        ],
-                      ],
-                    ),
-                    trailing: Text(
-                      '$totalScore pts',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                     ),
-                  ),
-                ),
+                  );
+                },
               );
             },
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Text('Error cargando clasificación: ${error.toString()}'),
-        ),
+            loading: () => const SkeletonList(count: 10),
+            error: (error, stack) => Center(
+              child: Text('Error cargando clasificación: ${error.toString()}'),
+            ),
+          ),
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConfettiWidget(
+              confettiController: _confetti,
+              blastDirectionality: BlastDirectionality.explosive,
+              shouldLoop: false,
+              emissionFrequency: 0.05,
+              numberOfParticles: 20,
+              maxBlastForce: 22,
+              minBlastForce: 8,
+              gravity: 0.25,
+              colors: const [
+                Color(0xFFFFD700), // oro
+                Color(0xFFC0C0C0), // plata
+                Color(0xFFCD7F32), // bronce
+                Color(0xFF5E35B1), // morado
+                Color(0xFFFF9800), // naranja
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

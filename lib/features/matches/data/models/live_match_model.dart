@@ -9,6 +9,7 @@ class LiveMatchModel {
   final int fouls1;
   final int fouls2;
   final String estado; // 'en_juego' | 'finalizado'
+  final String? ganador; // nombre del equipo ganador o 'Empate' (al finalizar)
   final DateTime createdAt;
 
   LiveMatchModel({
@@ -22,6 +23,7 @@ class LiveMatchModel {
     this.fouls1 = 0,
     this.fouls2 = 0,
     this.estado = 'en_juego',
+    this.ganador,
     required this.createdAt,
   });
 
@@ -39,6 +41,7 @@ class LiveMatchModel {
       fouls1: json['fouls1'] ?? 0,
       fouls2: json['fouls2'] ?? 0,
       estado: json['estado'] ?? 'en_juego',
+      ganador: json['ganador'] as String?,
       createdAt: DateTime.parse(json['created_at'] as String),
     );
   }

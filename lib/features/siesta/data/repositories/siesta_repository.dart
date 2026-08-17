@@ -74,6 +74,293 @@ class SiestaRepository {
     });
   }
 
+  /// Genera partidos "todos contra todos" dentro de cada grupo. No duplica
+  /// enfrentamientos que ya existan. Devuelve cuántos partidos ha creado.
+  Future<int> generateGroupMatches(String competitionId) async {
+    final participants = await getParticipants(competitionId);
+    final existing = await getMatches(competitionId);
+
+    // Clave de un enfrentamiento, sin importar el orden.
+    String pairKey(String a, String b) =>
+        a.compareTo(b) < 0 ? '$a|$b' : '$b|$a';
+
+    final existingPairs = <String>{
+      for (final m in existing) pairKey(m.participant1Id, m.participant2Id),
+    };
+
+    // Agrupar por grupo (null/vacío => un grupo común "sin grupo").
+    final Map<String, List<SiestaParticipantModel>> groups = {};
+    for (final p in participants) {
+      final g =
+          (p.grupo == null || p.grupo!.trim().isEmpty) ? '' : p.grupo!.trim();
+      groups.putIfAbsent(g, () => []).add(p);
+    }
+
+    final rows = <Map<String, dynamic>>[];
+    for (final entry in groups.entries) {
+      final list = entry.value;
+      for (var i = 0; i < list.length; i++) {
+        for (var j = i + 1; j < list.length; j++) {
+          final a = list[i].id;
+          final b = list[j].id;
+          final key = pairKey(a, b);
+          if (existingPairs.contains(key)) continue;
+          existingPairs.add(key);
+          rows.add({
+            'competition_id': competitionId,
+            'participant1_id': a,
+            'participant2_id': b,
+            if (entry.key.isNotEmpty) 'ronda': 'Grupo ${entry.key}',
+          });
+        }
+      }
+    }
+
+    if (rows.isNotEmpty) {
+      await _supabaseClient.from('siesta_matches').insert(rows);
+    }
+    return rows.length;
+  }
+
+  bool _isPlayoffRound(String? ronda) {
+    if (ronda == null) return false;
+    final r = ronda.toLowerCase();
+    return r.contains('octavo') ||
+        r.contains('cuarto') ||
+        r.contains('semifinal') ||
+        r.contains('final') ||
+        r.contains('dieciseis') ||
+        r.contains('playoff');
+  }
+
+  /// Ordena los participantes de un grupo: 1) puntos de liga, 2) enfrentamiento
+  /// directo, 3) partidos ganados, 4) menos partidos perdidos.
+  List<SiestaParticipantModel> _rankGroup(
+      List<SiestaParticipantModel> group, List<SiestaMatchModel> groupMatches) {
+    final ids = group.map((p) => p.id).toSet();
+    final internal = groupMatches
+        .where((m) =>
+            ids.contains(m.participant1Id) && ids.contains(m.participant2Id))
+        .toList();
+
+    int h2hPoints(String a, String b) {
+      int pts = 0;
+      for (final m in internal) {
+        if (m.participant1Id == a && m.participant2Id == b) {
+          if (m.score1 > m.score2) {
+            pts += 3;
+          } else if (m.score1 == m.score2) {
+            pts += 1;
+          }
+        } else if (m.participant1Id == b && m.participant2Id == a) {
+          if (m.score2 > m.score1) {
+            pts += 3;
+          } else if (m.score1 == m.score2) {
+            pts += 1;
+          }
+        }
+      }
+      return pts;
+    }
+
+    final sorted = [...group];
+    sorted.sort((a, b) {
+      if (a.puntosLiga != b.puntosLiga) {
+        return b.puntosLiga.compareTo(a.puntosLiga);
+      }
+      final ah = h2hPoints(a.id, b.id);
+      final bh = h2hPoints(b.id, a.id);
+      if (ah != bh) return bh.compareTo(ah);
+      if (a.partidosGanados != b.partidosGanados) {
+        return b.partidosGanados.compareTo(a.partidosGanados);
+      }
+      if (a.partidosPerdidos != b.partidosPerdidos) {
+        return a.partidosPerdidos.compareTo(b.partidosPerdidos);
+      }
+      return 0;
+    });
+    return sorted;
+  }
+
+  int _compareOverall(SiestaParticipantModel a, SiestaParticipantModel b) {
+    if (a.puntosLiga != b.puntosLiga) {
+      return b.puntosLiga.compareTo(a.puntosLiga);
+    }
+    if (a.partidosGanados != b.partidosGanados) {
+      return b.partidosGanados.compareTo(a.partidosGanados);
+    }
+    if (a.partidosPerdidos != b.partidosPerdidos) {
+      return a.partidosPerdidos.compareTo(b.partidosPerdidos);
+    }
+    return 0;
+  }
+
+  /// Orden de siembra estándar de un cuadro de tamaño [n] (potencia de 2).
+  /// Ej. n=4 -> [1,4,2,3]; n=8 -> [1,8,4,5,2,7,3,6].
+  List<int> _bracketSeedOrder(int n) {
+    List<int> order = [1, 2];
+    while (order.length < n) {
+      final sum = order.length * 2 + 1;
+      final next = <int>[];
+      for (final s in order) {
+        next.add(s);
+        next.add(sum - s);
+      }
+      order = next;
+    }
+    return order;
+  }
+
+  /// Intenta evitar que dos del mismo grupo se crucen en la primera ronda.
+  void _avoidSameGroupFirstRound(List<SiestaParticipantModel> ordered) {
+    String grp(SiestaParticipantModel p) => (p.grupo ?? '').trim();
+    for (var i = 0; i + 1 < ordered.length; i += 2) {
+      if (grp(ordered[i]).isEmpty) continue;
+      if (grp(ordered[i]) != grp(ordered[i + 1])) continue;
+      for (var j = 0; j + 1 < ordered.length; j += 2) {
+        if (j == i) continue;
+        final a = ordered[i];
+        final b = ordered[j + 1];
+        final c = ordered[j];
+        final d = ordered[i + 1];
+        if (grp(a).isNotEmpty && grp(a) == grp(b)) continue;
+        if (grp(c).isNotEmpty && grp(c) == grp(d)) continue;
+        final tmp = ordered[i + 1];
+        ordered[i + 1] = ordered[j + 1];
+        ordered[j + 1] = tmp;
+        break;
+      }
+    }
+  }
+
+  /// Genera la fase eliminatoria. [bracketSize] = 4 (semifinales), 8 (cuartos)
+  /// o 16 (octavos). Clasifican los primeros de cada grupo, luego los segundos,
+  /// luego los mejores terceros, etc., hasta completar el cuadro. Borra un
+  /// playoff anterior si lo hubiera. Devuelve cuántos partidos ha creado.
+  Future<int> generatePlayoff(String competitionId, int bracketSize) async {
+    final participants = await getParticipants(competitionId);
+    final allMatches = await getMatches(competitionId);
+
+    final groupMatches = allMatches
+        .where((m) => m.estado == 'finalizado' && !_isPlayoffRound(m.ronda))
+        .toList();
+
+    // Agrupar por grupo.
+    final Map<String, List<SiestaParticipantModel>> groups = {};
+    for (final p in participants) {
+      final g =
+          (p.grupo == null || p.grupo!.trim().isEmpty) ? '' : p.grupo!.trim();
+      groups.putIfAbsent(g, () => []).add(p);
+    }
+
+    // Clasificación de cada grupo (con enfrentamiento directo).
+    final Map<String, List<SiestaParticipantModel>> ranked = {};
+    groups.forEach((g, list) => ranked[g] = _rankGroup(list, groupMatches));
+
+    // Sembrado: 1º de cada grupo (ordenados entre sí), luego 2º, luego 3º...
+    final maxPos =
+        ranked.values.map((l) => l.length).fold(0, (a, b) => a > b ? a : b);
+    final seedList = <SiestaParticipantModel>[];
+    for (var pos = 0; pos < maxPos; pos++) {
+      final tier = <SiestaParticipantModel>[];
+      ranked.forEach((g, list) {
+        if (pos < list.length) tier.add(list[pos]);
+      });
+      tier.sort(_compareOverall);
+      seedList.addAll(tier);
+    }
+
+    if (seedList.length < bracketSize) {
+      throw Exception(
+          'No hay suficientes participantes: se necesitan $bracketSize y hay ${seedList.length}.');
+    }
+
+    final qualifiers = seedList.take(bracketSize).toList(); // cabezas 1..N
+    final slots = _bracketSeedOrder(bracketSize);
+    final ordered = slots.map((seed) => qualifiers[seed - 1]).toList();
+    _avoidSameGroupFirstRound(ordered);
+
+    final roundName = bracketSize == 16
+        ? 'Octavos'
+        : bracketSize == 8
+            ? 'Cuartos'
+            : 'Semifinal';
+
+    // Aseguramos formato con playoffs para que estas rondas no alteren la
+    // clasificación de grupos.
+    await _supabaseClient
+        .from('siesta_competitions')
+        .update({'formato': 'grupos_playoffs'}).eq('id', competitionId);
+
+    // Borrar cualquier playoff previo (para regenerar limpio).
+    for (final m in allMatches.where((m) => _isPlayoffRound(m.ronda))) {
+      await _supabaseClient.from('siesta_matches').delete().eq('id', m.id);
+    }
+
+    // Crear la primera ronda en orden de cuadro (fecha = orden del slot).
+    final base = DateTime(2000);
+    final rows = <Map<String, dynamic>>[];
+    for (var i = 0; i + 1 < ordered.length; i += 2) {
+      rows.add({
+        'competition_id': competitionId,
+        'participant1_id': ordered[i].id,
+        'participant2_id': ordered[i + 1].id,
+        'ronda': roundName,
+        'fecha': base.add(Duration(seconds: i ~/ 2)).toIso8601String(),
+      });
+    }
+    if (rows.isNotEmpty) {
+      await _supabaseClient.from('siesta_matches').insert(rows);
+    }
+    return rows.length;
+  }
+
+  /// Si una ronda de playoff está completa, crea automáticamente la siguiente
+  /// emparejando a los ganadores en orden de cuadro. Crea una ronda por llamada.
+  Future<void> advancePlayoffIfReady(String competitionId) async {
+    final matches = await getMatches(competitionId);
+    const nextName = {
+      'octavos': 'Cuartos',
+      'cuartos': 'Semifinal',
+      'semifinal': 'Final',
+    };
+
+    for (final r in ['octavos', 'cuartos', 'semifinal']) {
+      final roundMatches = matches
+          .where((m) => (m.ronda ?? '').toLowerCase().contains(r))
+          .toList();
+      if (roundMatches.length < 2) continue;
+      final nextLabel = nextName[r]!;
+      final nextExists = matches
+          .any((m) => (m.ronda ?? '').toLowerCase() == nextLabel.toLowerCase());
+      if (nextExists) continue;
+      if (!roundMatches.every((m) => m.estado == 'finalizado')) continue;
+
+      roundMatches.sort((a, b) =>
+          (a.fecha ?? DateTime(2100)).compareTo(b.fecha ?? DateTime(2100)));
+      final winners = roundMatches
+          .map((m) =>
+              m.score1 >= m.score2 ? m.participant1Id : m.participant2Id)
+          .toList();
+
+      final base = DateTime(2000);
+      final rows = <Map<String, dynamic>>[];
+      for (var i = 0; i + 1 < winners.length; i += 2) {
+        rows.add({
+          'competition_id': competitionId,
+          'participant1_id': winners[i],
+          'participant2_id': winners[i + 1],
+          'ronda': nextLabel,
+          'fecha': base.add(Duration(seconds: i ~/ 2)).toIso8601String(),
+        });
+      }
+      if (rows.isNotEmpty) {
+        await _supabaseClient.from('siesta_matches').insert(rows);
+      }
+      break; // solo una ronda por llamada
+    }
+  }
+
   Future<void> updateMatchScore(String matchId, int score1, int score2) async {
     // 1. Fetch match to check status and ronda
     final matchData = await _supabaseClient.from('siesta_matches').select().eq('id', matchId).single();

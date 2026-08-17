@@ -47,6 +47,20 @@ class GroupsRepository {
         .toList();
   }
 
+  // IDs de jugadores que YA pertenecen a algún grupo de COMPETICIÓN
+  // (excluye equipos de partido). Sirve para no ofrecerlos al añadir a otro grupo.
+  Future<Set<String>> getPlayersInCompetitionGroups() async {
+    final compRes =
+        await _supabase.from('teams').select('id').eq('is_match_team', false);
+    final compIds = (compRes as List).map((t) => t['id'] as String).toList();
+    if (compIds.isEmpty) return <String>{};
+    final res = await _supabase
+        .from('team_members')
+        .select('user_id')
+        .inFilter('team_id', compIds);
+    return (res as List).map((e) => e['user_id'] as String).toSet();
+  }
+
   // Añadir usuario a grupo
   Future<void> addMemberToGroup(String groupId, String userId) async {
     await _supabase.from('team_members').upsert({

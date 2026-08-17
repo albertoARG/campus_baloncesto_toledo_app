@@ -10,10 +10,22 @@ final competitionsRepositoryProvider = Provider<CompetitionsRepository>((ref) {
   return CompetitionsRepository(ref.watch(supabaseClientProvider));
 });
 
-// Provider for fetching station days
+// Provider for fetching station days (todos, para la gestión)
 final stationDaysProvider = FutureProvider<List<StationDayModel>>((ref) {
   final repository = ref.watch(competitionsRepositoryProvider);
   return repository.getStationDays();
+});
+
+// Días visibles según el rol: staff (admin/entrenador) ve publicados y los
+// visibles solo para entrenadores; el resto solo los públicos.
+final visibleStationDaysProvider = FutureProvider<List<StationDayModel>>((ref) async {
+  final repository = ref.watch(competitionsRepositoryProvider);
+  final role = ref.watch(currentUserProfileProvider).value?.role ?? 'visitante';
+  final staff = role == 'admin' || role == 'entrenador';
+  final all = await repository.getStationDays();
+  return all
+      .where((d) => staff ? (d.isPublished || d.visibleEntrenadores) : d.isPublished)
+      .toList();
 });
 
 // Provider for fetching stations
@@ -51,7 +63,13 @@ final globalStandingsProvider = FutureProvider<List<Map<String, dynamic>>>((ref)
   final repository = ref.watch(competitionsRepositoryProvider);
   final groupId = ref.watch(selectedGroupIdProvider);
   final dayId = ref.watch(selectedDayIdProvider);
-  return repository.getGlobalStandings(groupId: groupId, dayId: dayId);
+  final role = ref.watch(currentUserProfileProvider).value?.role ?? 'visitante';
+  final staff = role == 'admin' || role == 'entrenador';
+  return repository.getGlobalStandings(
+    groupId: groupId,
+    dayId: dayId,
+    staffView: staff,
+  );
 });
 
 // Provider for fetching all players

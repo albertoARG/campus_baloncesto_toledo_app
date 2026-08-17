@@ -9,6 +9,10 @@ import '../../../tablon/presentation/providers/tablon_providers.dart';
 import '../../../blog/presentation/providers/blog_providers.dart';
 import '../../../../core/services/notification_service.dart';
 import '../../../../core/services/cloudinary_service.dart';
+import '../../../../core/theme/theme_mode_provider.dart';
+import '../../../../core/widgets/skeleton.dart';
+import '../providers/home_images_provider.dart';
+import 'package:image_picker/image_picker.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -375,18 +379,6 @@ class _AppDrawer extends ConsumerWidget {
               context.push('/matches');
             },
           ),
-          if (role == 'admin' ||
-              role == 'entrenador' ||
-              role == 'jugador premium')
-            _DrawerItem(
-              icon: Icons.bar_chart,
-              label: 'Estadísticas Deportivas',
-              onTap: () {
-                Navigator.pop(context);
-                context.push('/stats');
-              },
-            ),
-
           // ─── Sección: Solo Staff ────────────────────────────
           if (canManageScores) ...[
             const Divider(),
@@ -448,6 +440,26 @@ class _AppDrawer extends ConsumerWidget {
                 context.push('/admin/veladas');
               },
             ),
+            if (canManageScores)
+              _DrawerItem(
+                icon: Icons.groups_2_outlined,
+                label: 'Gestionar Jugadores',
+                iconColor: Theme.of(context).colorScheme.primary,
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push('/admin/players');
+                },
+              ),
+            if (canManageScores)
+              _DrawerItem(
+                icon: Icons.timer_outlined,
+                label: 'Cronómetro',
+                iconColor: Theme.of(context).colorScheme.primary,
+                onTap: () {
+                  Navigator.pop(context);
+                  context.push('/cronometro');
+                },
+              ),
             if (isAdmin)
               _DrawerItem(
                 icon: Icons.manage_accounts_outlined,
@@ -462,6 +474,18 @@ class _AppDrawer extends ConsumerWidget {
 
           // ─── Sección: Sesión ────────────────────────────────
           const Divider(),
+          SwitchListTile(
+            secondary: Icon(
+              Theme.of(context).brightness == Brightness.dark
+                  ? Icons.dark_mode
+                  : Icons.light_mode,
+            ),
+            title: const Text('Modo oscuro'),
+            value: Theme.of(context).brightness == Brightness.dark,
+            onChanged: (on) => ref
+                .read(themeModeProvider.notifier)
+                .setMode(on ? ThemeMode.dark : ThemeMode.light),
+          ),
           if (isLoggedIn)
             _DrawerItem(
               icon: Icons.logout,
@@ -552,7 +576,8 @@ class _HomeBody extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final items = _buildItems(context);
+    final customImages = ref.watch(homeImagesProvider).value ?? const {};
+    final items = _buildItems(context, ref, customImages);
     final postsAsync = ref.watch(tablonPostsProvider);
 
     return RefreshIndicator(
@@ -677,57 +702,101 @@ class _HomeBody extends ConsumerWidget {
     );
   }
 
-  List<Widget> _buildItems(BuildContext context) {
-    final isPremium =
-        role == 'jugador premium' || role == 'admin' || role == 'entrenador';
+  /// Permite a un admin/entrenador cambiar la foto de una tarjeta del inicio.
+  /// Sube la imagen a Cloudinary y guarda la URL en la tabla `home_images`.
+  Future<void> _changeHomeImage(
+      BuildContext context, WidgetRef ref, String key) async {
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 1400,
+      imageQuality: 85,
+    );
+    if (picked == null || !context.mounted) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final url = await CloudinaryService().uploadImage(picked);
+      if (url == null) throw Exception('No se pudo subir la imagen');
+      await ref.read(supabaseClientProvider).from('home_images').upsert({
+        'key': key,
+        'image_url': url,
+        'updated_at': DateTime.now().toIso8601String(),
+      }, onConflict: 'key');
+      ref.invalidate(homeImagesProvider);
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Foto de inicio actualizada')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al cambiar la foto: $e')),
+        );
+      }
+    }
+  }
+
+  List<Widget> _buildItems(
+      BuildContext context, WidgetRef ref, Map<String, String> customImages) {
+    // Botón de editar la foto solo para admin/entrenador.
+    VoidCallback? edit(String key) =>
+        canManageScores ? () => _changeHomeImage(context, ref, key) : null;
 
     final widgets = <Widget>[
       _ImageNavCard(
-        imageUrl: 'assets/images/compet.png',
+        imageUrl: customImages['competiciones'] ?? 'assets/images/compet.png',
         title: 'VER COMPETICIONES',
         onTap: () => context.push('/standings'),
+        onEditImage: edit('competiciones'),
         secondaryTitle: canManageScores ? 'AÑADIR PUNTUACIÓN' : null,
         onSecondaryTap: canManageScores
             ? () => context.push('/add-score')
             : null,
       ),
       _ImageNavCard(
-        imageUrl: 'assets/images/blog.jpg',
+        imageUrl: customImages['blog'] ?? 'assets/images/blog.jpg',
         title: 'BLOG DEL CAMPUS',
         onTap: () => context.push('/blog'),
+        onEditImage: edit('blog'),
       ),
       _ImageNavCard(
-        imageUrl: 'assets/images/siesta.jpg',
+        imageUrl: customImages['siesta'] ?? 'assets/images/siesta.jpg',
         title: 'COMPES DE SIESTA',
         onTap: () => context.push('/siesta'),
+        onEditImage: edit('siesta'),
       ),
       _ImageNavCard(
-        imageUrl: 'assets/images/veladas.jpg',
+        imageUrl: customImages['veladas'] ?? 'assets/images/veladas.jpg',
         title: 'VELADAS',
         onTap: () => context.push('/veladas'),
+        onEditImage: edit('veladas'),
       ),
       _ImageNavCard(
-        imageUrl: 'assets/images/anuncio.jpg',
+        imageUrl: customImages['tablon'] ?? 'assets/images/anuncio.jpg',
         title: 'TABLÓN DE ANUNCIOS',
         onTap: () => context.push('/tablon'),
+        onEditImage: edit('tablon'),
       ),
       _ImageNavCard(
-        imageUrl: 'assets/images/entrenamientos.jpg',
+        imageUrl:
+            customImages['entrenamientos'] ?? 'assets/images/entrenamientos.jpg',
         title: 'ENTRENAMIENTOS',
         onTap: () => context.push('/trainings'),
+        onEditImage: edit('entrenamientos'),
       ),
       _ImageNavCard(
-        imageUrl: 'assets/images/partidos.jpg',
+        imageUrl: customImages['partidos'] ?? 'assets/images/partidos.jpg',
         title: 'PARTIDOS EN DIRECTO',
         onTap: () => context.push('/matches'),
+        onEditImage: edit('partidos'),
       ),
-      if (isPremium)
-        _ImageNavCard(
-          imageUrl:
-              'https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=800&auto=format&fit=crop',
-          title: 'ESTADÍSTICAS DEPORTIVAS',
-          onTap: () => context.push('/stats'),
-        ),
     ];
 
     if (canManageScores || isAdmin) {
@@ -812,6 +881,7 @@ class _ImageNavCard extends StatelessWidget {
   final VoidCallback onTap;
   final String? secondaryTitle;
   final VoidCallback? onSecondaryTap;
+  final VoidCallback? onEditImage;
 
   const _ImageNavCard({
     required this.imageUrl,
@@ -819,11 +889,17 @@ class _ImageNavCard extends StatelessWidget {
     required this.onTap,
     this.secondaryTitle,
     this.onSecondaryTap,
+    this.onEditImage,
   });
 
   @override
   Widget build(BuildContext context) {
     final isNetwork = imageUrl.startsWith('http');
+    // Banda con texto blanco: necesita un morado sólido. En oscuro el
+    // `primary` es muy claro y queda lavado, así que usamos uno vibrante.
+    final Color bandColor = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF6D28D9)
+        : Theme.of(context).colorScheme.primary;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
@@ -832,41 +908,80 @@ class _ImageNavCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            InkWell(
-              onTap: onTap,
-              child: SizedBox(
-                height: 160,
-                child: isNetwork
-                    ? Image.network(
-                        CloudinaryService.optimizedUrl(imageUrl, width: 800),
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: Colors.grey[300],
-                          height: 160,
-                          child: const Icon(
-                            Icons.image_not_supported,
-                            size: 50,
-                            color: Colors.grey,
+            Stack(
+              children: [
+                InkWell(
+                  onTap: onTap,
+                  child: SizedBox(
+                    height: 160,
+                    width: double.infinity,
+                    child: isNetwork
+                        ? Image.network(
+                            CloudinaryService.optimizedUrl(imageUrl, width: 800),
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, progress) {
+                              if (progress == null) return child;
+                              return const Skeleton(
+                                width: double.infinity,
+                                height: 160,
+                                radius: 0,
+                              );
+                            },
+                            frameBuilder:
+                                (context, child, frame, wasSyncLoaded) {
+                              if (wasSyncLoaded) return child;
+                              return AnimatedOpacity(
+                                opacity: frame == null ? 0 : 1,
+                                duration: const Duration(milliseconds: 350),
+                                curve: Curves.easeOut,
+                                child: child,
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              color: Colors.grey[300],
+                              height: 160,
+                              child: const Icon(
+                                Icons.image_not_supported,
+                                size: 50,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          )
+                        : Image.asset(
+                            imageUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              color: Colors.grey[300],
+                              height: 160,
+                              child: const Icon(
+                                Icons.image_not_supported,
+                                size: 50,
+                                color: Colors.grey,
+                              ),
+                            ),
                           ),
-                        ),
-                      )
-                    : Image.asset(
-                        imageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: Colors.grey[300],
-                          height: 160,
-                          child: const Icon(
-                            Icons.image_not_supported,
-                            size: 50,
-                            color: Colors.grey,
-                          ),
-                        ),
+                  ),
+                ),
+                if (onEditImage != null)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Material(
+                      color: Colors.black54,
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
+                      child: IconButton(
+                        iconSize: 20,
+                        tooltip: 'Cambiar foto',
+                        icon: const Icon(Icons.edit, color: Colors.white),
+                        onPressed: onEditImage,
                       ),
-              ),
+                    ),
+                  ),
+              ],
             ),
             Material(
-              color: Theme.of(context).colorScheme.primary,
+              color: bandColor,
               child: InkWell(
                 onTap: onTap,
                 child: Padding(
@@ -888,7 +1003,7 @@ class _ImageNavCard extends StatelessWidget {
             if (secondaryTitle != null && onSecondaryTap != null) ...[
               Container(height: 1, color: Colors.white24),
               Material(
-                color: Theme.of(context).colorScheme.primary,
+                color: bandColor,
                 child: InkWell(
                   onTap: onSecondaryTap,
                   child: Padding(

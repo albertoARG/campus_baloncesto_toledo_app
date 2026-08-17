@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/siesta_providers.dart';
+import '../../../../../core/sync/sync_queue.dart';
+import '../../../../../core/widgets/quick_number_field.dart';
 
 class AddDailyScoreDialog extends ConsumerStatefulWidget {
   final String competitionId;
@@ -34,19 +36,28 @@ class _AddDailyScoreDialogState extends ConsumerState<AddDailyScoreDialog> {
 
     setState(() => _isLoading = true);
     try {
-      final repository = ref.read(siestaRepositoryProvider);
       final puntos = int.parse(_puntosController.text);
-      await repository.addDailyScore(
-        widget.competitionId,
-        widget.userId,
-        puntos,
-        DateTime.now(),
-      );
-      
+      final uploaded = await ref.read(syncQueueProvider).addSiestaDailyScore(
+            widget.competitionId,
+            widget.userId,
+            puntos,
+            DateTime.now(),
+            label: '${widget.participantName} · $puntos pts',
+          );
+
       ref.invalidate(siestaDailyScoresProvider(widget.competitionId));
       ref.invalidate(siestaParticipantsProvider(widget.competitionId));
-      
+
       if (mounted) {
+        if (!uploaded) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                  'Sin conexión: guardado. Se subirá al recuperar la conexión.'),
+              backgroundColor: Colors.orange.shade800,
+            ),
+          );
+        }
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -70,15 +81,10 @@ class _AddDailyScoreDialogState extends ConsumerState<AddDailyScoreDialog> {
           children: [
             Text('Participante: ${widget.participantName}', style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            TextFormField(
+            QuickNumberField(
               controller: _puntosController,
-              decoration: const InputDecoration(labelText: 'Puntos a sumar', border: OutlineInputBorder()),
-              keyboardType: TextInputType.number,
-              validator: (val) {
-                if (val == null || val.isEmpty) return 'Obligatorio';
-                if (int.tryParse(val) == null) return 'Debe ser número';
-                return null;
-              },
+              label: 'Puntos a sumar',
+              quickAdds: const [1, 3, 5],
             ),
           ],
         ),

@@ -116,5 +116,58 @@
   -->
   <script src="flutter_bootstrap.js" async=""></script>
 
+  <script>
+    // Aviso de "nueva versión disponible": detecta cuando el service worker
+    // ha descargado una versión nueva y ofrece recargar.
+    (function () {
+      if (!('serviceWorker' in navigator)) return;
+
+      function showUpdateBanner() {
+        if (document.getElementById('update-banner')) return;
+        var bar = document.createElement('div');
+        bar.id = 'update-banner';
+        bar.style.cssText =
+          'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);' +
+          'z-index:99999;background:#5E35B1;color:#fff;padding:10px 14px;' +
+          'border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.3);display:flex;' +
+          'align-items:center;gap:12px;font-family:sans-serif;font-size:14px;max-width:92%;';
+        var msg = document.createElement('span');
+        msg.textContent = 'Hay una nueva versión disponible';
+        var btn = document.createElement('button');
+        btn.textContent = 'Actualizar';
+        btn.style.cssText =
+          'background:#fff;color:#5E35B1;border:none;border-radius:8px;' +
+          'padding:6px 12px;font-weight:bold;cursor:pointer;font-size:14px;';
+        btn.onclick = function () {
+          btn.textContent = 'Actualizando…';
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            return Promise.all(regs.map(function (r) { return r.unregister(); }));
+          }).then(function () { location.reload(); })
+            .catch(function () { location.reload(); });
+        };
+        bar.appendChild(msg);
+        bar.appendChild(btn);
+        document.body.appendChild(bar);
+      }
+
+      navigator.serviceWorker.ready.then(function (reg) {
+        if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner();
+        reg.addEventListener('updatefound', function () {
+          var nw = reg.installing;
+          if (!nw) return;
+          nw.addEventListener('statechange', function () {
+            if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+              showUpdateBanner();
+            }
+          });
+        });
+        // Comprobar periódicamente y al volver a la pestaña.
+        setInterval(function () { reg.update(); }, 60000);
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'visible') reg.update();
+        });
+      }).catch(function () {});
+    })();
+  </script>
 
 </body></html>

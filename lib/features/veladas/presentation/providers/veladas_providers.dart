@@ -32,6 +32,12 @@ final veladaGroupMembersProvider =
       return ref.watch(veladasRepositoryProvider).getGroupMembers(groupId);
     });
 
+// user_ids ya asignados a algún grupo de una velada
+final veladaAssignedUsersProvider =
+    FutureProvider.family<Set<String>, String>((ref, veladaId) {
+      return ref.watch(veladasRepositoryProvider).getAssignedUserIds(veladaId);
+    });
+
 // Provide the global standings for veladas
 final veladasStandingsProvider = FutureProvider<List<Map<String, dynamic>>>((
   ref,

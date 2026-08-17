@@ -59,7 +59,18 @@ class CompetitionsRepository {
         .eq('id', id);
   }
 
-  Future<List<Map<String, dynamic>>> getGlobalStandings({String? groupId, String? dayId}) async {
+  /// Clasificación por estaciones.
+  /// - [staffView]: si true (admin/entrenador), incluye días publicados y días
+  ///   visibles solo para entrenadores. Si false (jugadores/familiares), solo
+  ///   los días públicos.
+  /// - [ignorePublish]: uso interno; considera el día indicado sin importar su
+  ///   estado de publicación (para calcular el auto-mínimo).
+  Future<List<Map<String, dynamic>>> getGlobalStandings({
+    String? groupId,
+    String? dayId,
+    bool staffView = false,
+    bool ignorePublish = false,
+  }) async {
     // 1. Get players
     List<UserModel> players;
     if (groupId == null) {
@@ -73,68 +84,78 @@ class CompetitionsRepository {
           .from('team_members')
           .select('users(*)')
           .eq('team_id', groupId);
-      
+
       players = (teamMembersResponse as List)
           .map((j) => UserModel.fromJson(j['users']))
           .where((u) => u.role == 'jugador') // Only rank players
           .toList();
     }
 
-    // 2. Get all scores. Supabase caps each request at 1000 rows, so we
-    // paginate until a page comes back short to make sure nothing is lost.
+    List<Map<String, dynamic>> buildRankings(Map<String, int> totals) {
+      final r = players
+          .map((p) => {'player': p, 'totalScore': totals[p.id] ?? 0})
+          .toList();
+      r.sort((a, b) => (b['totalScore'] as int).compareTo(a['totalScore'] as int));
+      return r;
+    }
+
+    // 2. Determinar qué días son visibles para este consumidor.
+    List<String> allowedDayIds;
+    if (ignorePublish && dayId != null) {
+      allowedDayIds = [dayId];
+    } else {
+      final daysResp = await _supabaseClient.from('station_days').select();
+      allowedDayIds = (daysResp as List).where((d) {
+        final pub = d['is_published'] == true;
+        final coach = d['visible_entrenadores'] == true;
+        return staffView ? (pub || coach) : pub;
+      }).map<String>((d) => d['id'] as String).toList();
+      if (dayId != null) {
+        allowedDayIds = allowedDayIds.where((id) => id == dayId).toList();
+      }
+    }
+
+    if (allowedDayIds.isEmpty) {
+      return buildRankings({});
+    }
+
+    // 3. Get all scores for the allowed days. Supabase caps each request at
+    // 1000 rows, so we paginate until a page comes back short.
     const pageSize = 1000;
     final List<StationScoreModel> allScores = [];
     var offset = 0;
     while (true) {
-      var query = _supabaseClient
+      final page = await _supabaseClient
           .from('station_scores')
-          .select('*, station_days!inner(is_published)')
-          .eq('station_days.is_published', true);
-      if (dayId != null) {
-        query = query.eq('station_day_id', dayId);
-      }
-      final page = await query.order('id', ascending: true).range(offset, offset + pageSize - 1);
+          .select()
+          .inFilter('station_day_id', allowedDayIds)
+          .order('id', ascending: true)
+          .range(offset, offset + pageSize - 1);
       allScores.addAll((page as List).map((j) => StationScoreModel.fromJson(j)));
       if (page.length < pageSize) break;
       offset += pageSize;
     }
 
-    // 3. Process rankings
-    List<Map<String, dynamic>> rankings = [];
-
+    // 4. Totales: por estación y día, se suman las 2 mejores puntuaciones.
+    final Map<String, int> totals = {};
     for (var player in players) {
       final playerScores = allScores.where((s) => s.userId == player.id).toList();
       int totalScore = 0;
-      
-      // Group by station AND day: the same station can run on several days
-      // and each day contributes its own top-2 scores.
       final Set<String> uniqueStationDays =
           playerScores.map((s) => '${s.stationId}|${s.stationDayId}').toSet();
-
       for (var stationDayKey in uniqueStationDays) {
         final stationAttempts = playerScores
             .where((s) => '${s.stationId}|${s.stationDayId}' == stationDayKey)
             .toList();
-        // Sort descending to get the best ones
         stationAttempts.sort((a, b) => b.score.compareTo(a.score));
-
-        // Take top 2 and sum
-        final topAttempts = stationAttempts.take(2);
-        for (var attempt in topAttempts) {
+        for (var attempt in stationAttempts.take(2)) {
           totalScore += attempt.score;
         }
       }
-
-      rankings.add({
-        'player': player,
-        'totalScore': totalScore,
-      });
+      totals[player.id] = totalScore;
     }
 
-    // Sort rankings by total score descending
-    rankings.sort((a, b) => (b['totalScore'] as int).compareTo(a['totalScore'] as int));
-
-    return rankings;
+    return buildRankings(totals);
   }
 
   Future<void> createStationDay(String nombre, DateTime? fecha) async {
@@ -152,25 +173,44 @@ class CompetitionsRepository {
     await _supabaseClient.from('station_days').delete().eq('id', id);
   }
 
+  /// Asigna a los jugadores con 0 puntos ese día la menor puntuación obtenida
+  /// por el resto de jugadores de SU GRUPO DE COMPETICIÓN que sí compitieron.
+  /// Idempotente: primero borra las asignaciones automáticas previas del día.
   Future<void> _autoAssignMinimumScores(String dayId) async {
-    final teamMembersResponse = await _supabaseClient.from('team_members').select('team_id, user_id');
+    // 0. Limpiar asignaciones automáticas anteriores de este día.
+    await _supabaseClient
+        .from('station_scores')
+        .delete()
+        .eq('station_day_id', dayId)
+        .eq('auto_assigned', true);
+
+    // 1. Mapa jugador -> grupo de COMPETICIÓN (excluye equipos de partido,
+    //    is_match_team=true, que también tienen filas en team_members).
+    final compTeamsResp =
+        await _supabaseClient.from('teams').select('id').eq('is_match_team', false);
+    final Set<String> compTeamIds =
+        (compTeamsResp as List).map<String>((t) => t['id'] as String).toSet();
+    final teamMembersResponse =
+        await _supabaseClient.from('team_members').select('team_id, user_id');
     final Map<String, String> userToTeam = {};
     for (var row in teamMembersResponse as List) {
-      userToTeam[row['user_id']] = row['team_id'];
+      final tid = row['team_id'] as String?;
+      if (tid != null && compTeamIds.contains(tid)) {
+        userToTeam[row['user_id']] = tid;
+      }
     }
 
-    final rankings = await getGlobalStandings(dayId: dayId);
+    // 2. Clasificación real de ese día (sin filtrar por publicación; las filas
+    //    automáticas ya se borraron en el paso 0).
+    final rankings = await getGlobalStandings(dayId: dayId, ignorePublish: true);
 
     final Map<String, int> teamMinimums = {};
     final Map<String, List<UserModel>> teamZeros = {};
-
     for (var ranking in rankings) {
       final UserModel player = ranking['player'];
       final int score = ranking['totalScore'];
       final teamId = userToTeam[player.id];
-
       if (teamId == null) continue;
-
       if (score > 0) {
         final currentMin = teamMinimums[teamId];
         if (currentMin == null || score < currentMin) {
@@ -181,49 +221,54 @@ class CompetitionsRepository {
       }
     }
 
+    // 3. Estación de referencia (una cualquiera con puntuación real ese día).
     final stationsResponse = await _supabaseClient
         .from('station_scores')
         .select('station_id')
         .eq('station_day_id', dayId)
         .limit(1);
-        
     if ((stationsResponse as List).isEmpty) return;
-    
     final String fallbackStationId = stationsResponse.first['station_id'];
     final authUserId = _supabaseClient.auth.currentUser?.id;
 
+    // 4. Asignar el mínimo del grupo a los jugadores con 0.
     for (var teamId in teamZeros.keys) {
       final minScore = teamMinimums[teamId];
       if (minScore != null && minScore > 0) {
-        final playersWithZero = teamZeros[teamId]!;
-        for (var player in playersWithZero) {
-          final newScore = StationScoreModel(
-            id: '',
-            userId: player.id,
-            coachId: authUserId,
-            stationId: fallbackStationId,
-            stationDayId: dayId,
-            score: minScore,
-            createdAt: DateTime.now(),
-          );
-          await addScore(newScore);
+        for (var player in teamZeros[teamId]!) {
+          await _supabaseClient.from('station_scores').insert({
+            'user_id': player.id,
+            if (authUserId != null) 'coach_id': authUserId,
+            'station_id': fallbackStationId,
+            'station_day_id': dayId,
+            'score': minScore,
+            'auto_assigned': true,
+          });
         }
       }
     }
   }
 
-  Future<void> toggleStationDayPublish(String id, bool isPublished) async {
+  /// Cambia la visibilidad de un día de competición.
+  /// [state]: 'borrador' | 'entrenadores' | 'publico'.
+  Future<void> setStationDayVisibility(String id, String state) async {
+    final bool pub = state == 'publico';
+    final bool coach = state == 'entrenadores' || state == 'publico';
     await _supabaseClient
         .from('station_days')
-        .update({'is_published': isPublished})
+        .update({'is_published': pub, 'visible_entrenadores': coach})
         .eq('id', id);
 
-    if (isPublished) {
-      try {
-        await _autoAssignMinimumScores(id);
-      } catch (e) {
-        print("Error auto-assigning scores: \$e");
-      }
+    if (coach) {
+      // Al hacerse visible (entrenadores o público) se recalcula el auto-mínimo.
+      await _autoAssignMinimumScores(id);
+    } else {
+      // Borrador: quitar las asignaciones automáticas.
+      await _supabaseClient
+          .from('station_scores')
+          .delete()
+          .eq('station_day_id', id)
+          .eq('auto_assigned', true);
     }
   }
 

@@ -1,0 +1,194 @@
+// Modelo de datos - Campus Baloncesto App
+// Pegar en https://dbdiagram.io y exportar como PNG/PDF
+
+Table users {
+  id uuid [pk, note: 'FK -> auth.users.id']
+  role text
+  nombre text
+  apellidos text
+  foto_url text
+  posicion text
+  estatura numeric
+  edad int
+  nivel int
+  created_at timestamptz
+  updated_at timestamptz
+}
+
+Table teams {
+  id uuid [pk]
+  nombre text
+  categoria text
+  is_match_team bool
+  created_at timestamptz
+}
+
+Table team_members {
+  team_id uuid [ref: > teams.id]
+  user_id uuid [ref: > users.id]
+}
+
+Table trainings {
+  id uuid [pk]
+  titulo text
+  descripcion text
+  multimedia_url text
+  fecha timestamptz
+  team_id uuid [ref: > teams.id]
+  coach_id uuid [ref: > users.id]
+  created_at timestamptz
+}
+
+Table stations {
+  id uuid [pk]
+  nombre text
+  descripcion text
+  created_at timestamptz
+}
+
+Table station_days {
+  id uuid [pk]
+  nombre text
+  fecha date
+  is_published bool
+  created_at timestamptz
+}
+
+Table station_scores {
+  id uuid [pk]
+  user_id uuid [ref: > users.id]
+  coach_id uuid [ref: > users.id]
+  station_id uuid [ref: > stations.id]
+  station_day_id uuid [ref: > station_days.id]
+  score int
+  created_at timestamptz
+}
+
+Table live_matches {
+  id uuid [pk]
+  team1_id uuid [ref: > teams.id]
+  team2_id uuid [ref: > teams.id]
+  team1_name text
+  team2_name text
+  score1 int
+  score2 int
+  fouls1 int
+  fouls2 int
+  estado text
+  created_at timestamptz
+}
+
+Table siesta_competitions {
+  id uuid [pk]
+  nombre text
+  juego text
+  formato text
+  estado text
+  created_at timestamptz
+}
+
+Table siesta_participants {
+  id uuid [pk]
+  competition_id uuid [ref: > siesta_competitions.id]
+  user_id uuid [ref: > users.id]
+  puntos_liga int
+  partidos_jugados int
+  partidos_ganados int
+  partidos_perdidos int
+  grupo text
+  created_at timestamptz
+}
+
+Table siesta_matches {
+  id uuid [pk]
+  competition_id uuid [ref: > siesta_competitions.id]
+  participant1_id uuid [ref: > siesta_participants.id]
+  participant2_id uuid [ref: > siesta_participants.id]
+  score1 int
+  score2 int
+  ronda text
+  estado text
+  fecha timestamptz
+  created_at timestamptz
+}
+
+Table siesta_daily_scores {
+  id uuid [pk]
+  competition_id uuid [ref: > siesta_competitions.id]
+  user_id uuid [ref: > users.id]
+  fecha date
+  puntos int
+  created_at timestamptz
+}
+
+Table veladas {
+  id uuid [pk]
+  nombre text
+  fecha date
+  created_at timestamptz
+}
+
+Table velada_groups {
+  id uuid [pk]
+  velada_id uuid [ref: > veladas.id]
+  nombre text
+  is_winner bool
+  created_at timestamptz
+}
+
+Table velada_group_members {
+  group_id uuid [ref: > velada_groups.id]
+  user_id uuid [ref: > users.id]
+  is_captain bool
+  created_at timestamptz
+}
+
+Table blog_posts {
+  id uuid [pk]
+  title text
+  content text
+  image_url text
+  image_urls text
+  author_id uuid [ref: > users.id]
+  created_at timestamptz
+}
+
+Table tablon_posts {
+  id uuid [pk]
+  title text
+  content text
+  cover_image_url text
+  image_urls text
+  is_staff_only bool
+  author_id uuid [ref: > users.id]
+  created_at timestamptz
+}
+
+Table player_match_stats {
+  id uuid [pk]
+  user_id uuid [ref: > users.id]
+  match_name text
+  points int
+  rebounds int
+  assists int
+  steals int
+  blocks int
+  is_mvp bool
+  created_at timestamptz
+}
+
+Table fcm_tokens {
+  id uuid [pk]
+  user_id uuid [ref: > users.id]
+  token text
+  platform text
+  created_at timestamptz
+}
+
+Table device_tokens {
+  id uuid [pk]
+  user_id uuid [ref: > users.id]
+  token text
+  platform text
+  created_at timestamptz
+}

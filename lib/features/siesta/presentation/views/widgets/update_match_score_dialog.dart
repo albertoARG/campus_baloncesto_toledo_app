@@ -42,8 +42,11 @@ class _UpdateMatchScoreDialogState extends ConsumerState<UpdateMatchScoreDialog>
       final score2 = int.parse(_score2Controller.text);
       
       await repository.updateMatchScore(widget.match.id, score1, score2);
-      
+      // Si esto completa una ronda de playoff, crea la siguiente automáticamente.
+      await repository.advancePlayoffIfReady(widget.competitionId);
+
       ref.invalidate(siestaMatchesProvider(widget.competitionId));
+      ref.invalidate(siestaParticipantsProvider(widget.competitionId));
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));

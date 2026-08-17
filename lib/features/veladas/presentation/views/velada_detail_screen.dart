@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/velada_model.dart';
 import '../providers/veladas_providers.dart';
 import '../../data/models/velada_group_model.dart';
-import '../../data/models/velada_member_model.dart';
 import '../../../admin/presentation/providers/admin_providers.dart';
+import '../../../../core/widgets/search_field.dart';
 
 class VeladaDetailScreen extends ConsumerWidget {
   final VeladaModel velada;
@@ -58,6 +58,7 @@ class VeladaDetailScreen extends ConsumerWidget {
                     .generateBalancedGroups(velada.id, n);
 
                 ref.invalidate(veladaGroupsProvider(velada.id));
+                ref.invalidate(veladaAssignedUsersProvider(velada.id));
                 // We don't invalidate all members here because the parent group ids changed anyway
                 // so the FutureProvider family calls will be fresh.
 
@@ -92,40 +93,16 @@ class VeladaDetailScreen extends ConsumerWidget {
         title: Text(velada.nombre),
         actions: [
           IconButton(
-            icon: const Icon(Icons.delete),
-            onPressed: () async {
-              final confirm = await showDialog<bool>(
-                context: context,
-                builder: (c) => AlertDialog(
-                  title: const Text('Eliminar Velada'),
-                  content: const Text(
-                    '¿Seguro que quieres borrar toda la velada y sus grupos?',
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(c, false),
-                      child: const Text('Cancelar'),
-                    ),
-                    TextButton(
-                      onPressed: () => Navigator.pop(c, true),
-                      child: const Text(
-                        'Eliminar',
-                        style: TextStyle(color: Colors.red),
-                      ),
-                    ),
-                  ],
-                ),
-              );
-              if (confirm == true) {
-                await ref
-                    .read(veladasRepositoryProvider)
-                    .deleteVelada(velada.id);
-                ref.invalidate(allVeladasProvider);
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Velada eliminada')),
-                  );
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Actualizar',
+            onPressed: () {
+              final groups =
+                  ref.read(veladaGroupsProvider(velada.id)).value;
+              ref.invalidate(veladaGroupsProvider(velada.id));
+              ref.invalidate(veladaAssignedUsersProvider(velada.id));
+              if (groups != null) {
+                for (final g in groups) {
+                  ref.invalidate(veladaGroupMembersProvider(g.id));
                 }
               }
             },
@@ -178,55 +155,8 @@ class _GroupCard extends ConsumerWidget {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (context) => Consumer(
-        builder: (context, ref, child) {
-          final usersAsync = ref.watch(allUsersProvider);
-          return Container(
-            height: MediaQuery.of(context).size.height * 0.7,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                const Text('Añadir Jugador', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 16),
-                Expanded(
-                  child: usersAsync.when(
-                    data: (users) {
-                      final eligibleUsers = users.where((u) => u.role == 'jugador' || u.role == 'visitante').toList();
-                      return ListView.builder(
-                        itemCount: eligibleUsers.length,
-                        itemBuilder: (context, index) {
-                          final user = eligibleUsers[index];
-                          return ListTile(
-                            title: Text('${user.nombre} ${user.apellidos}'),
-                            subtitle: Text('Edad: ${user.edad ?? "?"}'),
-                            trailing: IconButton(
-                              icon: const Icon(Icons.add_circle, color: Colors.green),
-                              onPressed: () async {
-                                try {
-                                  await ref.read(veladasRepositoryProvider).addMemberToGroup(group.id, user.id);
-                                  ref.invalidate(veladaGroupMembersProvider(group.id));
-                                  if (context.mounted) {
-                                    Navigator.pop(context);
-                                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('${user.nombre} añadido')));
-                                  }
-                                } catch (e) {
-                                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                                }
-                              },
-                            ),
-                          );
-                        },
-                      );
-                    },
-                    loading: () => const Center(child: CircularProgressIndicator()),
-                    error: (e, s) => Center(child: Text('Error: $e')),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+      builder: (context) =>
+          _AddVeladaMemberSheet(veladaId: veladaId, groupId: group.id),
     );
   }
 
@@ -251,47 +181,50 @@ class _GroupCard extends ConsumerWidget {
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: group.isWinner
-                  ? Colors.amber.withValues(alpha: 0.2)
-                  : Colors.grey.shade200,
+                  ? Colors.amber.withValues(alpha: 0.22)
+                  : Theme.of(context).colorScheme.surfaceContainerHighest,
               borderRadius: const BorderRadius.vertical(
                 top: Radius.circular(12),
               ),
             ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  group.nombre + (group.isWinner ? ' 🏆 GANADOR' : ''),
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: group.isWinner
-                        ? Colors.amber.shade900
-                        : Colors.black87,
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          group.nombre,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color:
+                                group.isWinner ? Colors.amber.shade900 : null,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                if (!group.isWinner)
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.amber,
-                      foregroundColor: Colors.black87,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 0,
-                      ),
-                    ),
-                    icon: const Icon(Icons.star, size: 16),
-                    label: const Text(
-                      'Marcar Ganador',
-                      style: TextStyle(fontSize: 12),
-                    ),
-                    onPressed: () async {
-                      await ref
-                          .read(veladasRepositoryProvider)
-                          .markGroupAsWinner(veladaId, group.id);
-                      ref.invalidate(veladaGroupsProvider(veladaId));
-                    },
+                const SizedBox(width: 8),
+                FilterChip(
+                  avatar: Icon(
+                    Icons.emoji_events,
+                    size: 18,
+                    color: group.isWinner ? Colors.black87 : null,
                   ),
+                  label: const Text('Ganador'),
+                  selected: group.isWinner,
+                  selectedColor: Colors.amber,
+                  showCheckmark: false,
+                  onSelected: (v) async {
+                    await ref
+                        .read(veladasRepositoryProvider)
+                        .setGroupWinner(group.id, v);
+                    ref.invalidate(veladaGroupsProvider(veladaId));
+                  },
+                ),
               ],
             ),
           ),
@@ -307,7 +240,7 @@ class _GroupCard extends ConsumerWidget {
                     TextButton.icon(
                       onPressed: () => _showAddMemberDialog(context),
                       icon: const Icon(Icons.add),
-                      label: const Text('Añadir Jugador Manulamente'),
+                      label: const Text('Añadir Jugador manualmente'),
                     ),
                   ],
                 );
@@ -361,8 +294,22 @@ class _GroupCard extends ConsumerWidget {
                               padding: EdgeInsets.zero,
                               visualDensity: VisualDensity.compact,
                               onPressed: () async {
+                                final confirm = await showDialog<bool>(
+                                  context: context,
+                                  builder: (c) => AlertDialog(
+                                    title: const Text('Quitar del grupo'),
+                                    content: Text(
+                                        '¿Seguro que quieres sacar a ${m.user?.nombre ?? 'este jugador'} ${m.user?.apellidos ?? ''} de este grupo?'),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')),
+                                      TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Quitar', style: TextStyle(color: Colors.red))),
+                                    ],
+                                  ),
+                                );
+                                if (confirm != true) return;
                                 await ref.read(veladasRepositoryProvider).removeMemberFromGroup(group.id, m.userId);
                                 ref.invalidate(veladaGroupMembersProvider(group.id));
+                                ref.invalidate(veladaAssignedUsersProvider(veladaId));
                               },
                             ),
                           ],
@@ -387,6 +334,133 @@ class _GroupCard extends ConsumerWidget {
                 Padding(padding: EdgeInsets.all(16), child: Text('Error: $e')),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Hoja para añadir un jugador a un grupo: oculta a los que ya están en otro
+/// equipo de la velada y permite buscar escribiendo.
+class _AddVeladaMemberSheet extends ConsumerStatefulWidget {
+  final String veladaId;
+  final String groupId;
+  const _AddVeladaMemberSheet({required this.veladaId, required this.groupId});
+
+  @override
+  ConsumerState<_AddVeladaMemberSheet> createState() =>
+      _AddVeladaMemberSheetState();
+}
+
+class _AddVeladaMemberSheetState extends ConsumerState<_AddVeladaMemberSheet> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final usersAsync = ref.watch(allUsersProvider);
+    final assignedAsync =
+        ref.watch(veladaAssignedUsersProvider(widget.veladaId));
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.7,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text('Añadir Jugador',
+                        style: TextStyle(
+                            fontSize: 20, fontWeight: FontWeight.bold)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              SearchField(
+                hintText: 'Buscar por nombre…',
+                onChanged: (v) => setState(() => _query = v),
+              ),
+              const SizedBox(height: 4),
+              Expanded(
+                child: usersAsync.when(
+                  data: (users) {
+                    final assigned = assignedAsync.value ?? <String>{};
+                    final q = _query.trim().toLowerCase();
+                    final eligible = users
+                        .where((u) =>
+                            (u.role == 'jugador' || u.role == 'visitante') &&
+                            !assigned.contains(u.id) &&
+                            (q.isEmpty ||
+                                '${u.nombre} ${u.apellidos}'
+                                    .toLowerCase()
+                                    .contains(q)))
+                        .toList()
+                      ..sort((a, b) => '${a.nombre} ${a.apellidos}'
+                          .toLowerCase()
+                          .compareTo(
+                              '${b.nombre} ${b.apellidos}'.toLowerCase()));
+
+                    if (eligible.isEmpty) {
+                      return Center(
+                        child: Text(assignedAsync.isLoading
+                            ? 'Cargando…'
+                            : 'No hay jugadores disponibles (todos están ya en un equipo).'),
+                      );
+                    }
+                    return ListView.builder(
+                      itemCount: eligible.length,
+                      itemBuilder: (context, index) {
+                        final user = eligible[index];
+                        return ListTile(
+                          title: Text('${user.nombre} ${user.apellidos}'),
+                          subtitle: Text('Edad: ${user.edad ?? "?"}'),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.add_circle,
+                                color: Colors.green),
+                            onPressed: () async {
+                              try {
+                                await ref
+                                    .read(veladasRepositoryProvider)
+                                    .addMemberToGroup(widget.groupId, user.id);
+                                ref.invalidate(
+                                    veladaGroupMembersProvider(widget.groupId));
+                                ref.invalidate(veladaAssignedUsersProvider(
+                                    widget.veladaId));
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('${user.nombre} añadido'),
+                                      duration: const Duration(seconds: 1),
+                                    ),
+                                  );
+                                }
+                              } catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Error: $e')));
+                                }
+                              }
+                            },
+                          ),
+                        );
+                      },
+                    );
+                  },
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (e, s) => Center(child: Text('Error: $e')),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

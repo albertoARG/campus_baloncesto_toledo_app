@@ -8,13 +8,19 @@ class AuthRepository {
 
   // Get current user session
   Session? get currentSession => _supabase.auth.currentSession;
-  
+
   // Stream of auth state changes
   Stream<AuthState> get authStateChanges => _supabase.auth.onAuthStateChange;
 
   // Sign In
-  Future<AuthResponse> signIn({required String email, required String password}) async {
-    return await _supabase.auth.signInWithPassword(email: email, password: password);
+  Future<AuthResponse> signIn({
+    required String email,
+    required String password,
+  }) async {
+    return await _supabase.auth.signInWithPassword(
+      email: email,
+      password: password,
+    );
   }
 
   // Sign Up
@@ -27,16 +33,23 @@ class AuthRepository {
     return await _supabase.auth.signUp(
       email: email,
       password: password,
-      data: {
-        'nombre': nombre,
-        'apellidos': apellidos,
-      },
+      data: {'nombre': nombre, 'apellidos': apellidos},
     );
   }
 
   // Sign Out
   Future<void> signOut() async {
     await _supabase.auth.signOut();
+  }
+
+  // Envía el correo con el enlace para restablecer la contraseña.
+  Future<void> sendPasswordReset(String email, {String? redirectTo}) async {
+    await _supabase.auth.resetPasswordForEmail(email, redirectTo: redirectTo);
+  }
+
+  // Actualiza la contraseña del usuario en sesión (tras abrir el enlace).
+  Future<void> updatePassword(String newPassword) async {
+    await _supabase.auth.updateUser(UserAttributes(password: newPassword));
   }
 
   // Get full user profile from the public.users table

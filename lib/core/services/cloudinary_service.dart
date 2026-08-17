@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 
@@ -34,6 +35,23 @@ class CloudinaryService {
     }
     final idx = url.indexOf(marker);
     return '${url.substring(0, idx + marker.length)}fl_attachment/${url.substring(idx + marker.length)}';
+  }
+
+  /// Sube bytes directamente (p. ej. una jugada dibujada exportada a PNG).
+  Future<String?> uploadBytes(Uint8List bytes,
+      {String filename = 'imagen.png'}) async {
+    final uri =
+        Uri.parse('https://api.cloudinary.com/v1_1/$cloudName/auto/upload');
+    final request = http.MultipartRequest('POST', uri)
+      ..fields['upload_preset'] = uploadPreset
+      ..files.add(http.MultipartFile.fromBytes('file', bytes,
+          filename: filename));
+    final response = await request.send();
+    if (response.statusCode == 200) {
+      final data = await response.stream.bytesToString();
+      return jsonDecode(data)['secure_url'] as String?;
+    }
+    return null;
   }
 
   Future<String?> uploadImage(XFile imageFile) async {

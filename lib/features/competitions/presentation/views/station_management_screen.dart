@@ -61,15 +61,31 @@ class _StationManagementScreenState extends ConsumerState<StationManagementScree
     }
   }
 
-  void _togglePublishDay(String id, bool currentValue) async {
+  void _setVisibility(String id, String state) async {
     try {
-      await ref.read(competitionsRepositoryProvider).toggleStationDayPublish(id, !currentValue);
+      await ref.read(competitionsRepositoryProvider).setStationDayVisibility(id, state);
       ref.invalidate(stationDaysProvider);
+      ref.invalidate(visibleStationDaysProvider);
       ref.invalidate(globalStandingsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Visibilidad actualizada: ${_estadoLabelLargo(state)}')),
+        );
+      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
   }
+
+  String _estadoLabel(String e) =>
+      e == 'publico' ? 'Público' : (e == 'entrenadores' ? 'Entrenadores' : 'Borrador');
+
+  String _estadoLabelLargo(String e) => e == 'publico'
+      ? 'Público (todos)'
+      : (e == 'entrenadores' ? 'Solo entrenadores' : 'Borrador (oculto)');
+
+  Color _estadoColor(String e) =>
+      e == 'publico' ? Colors.green : (e == 'entrenadores' ? Colors.orange : Colors.grey);
 
   @override
   Widget build(BuildContext context) {
@@ -172,14 +188,26 @@ class _StationManagementScreenState extends ConsumerState<StationManagementScree
                     child: Icon(Icons.calendar_today, color: Theme.of(context).colorScheme.secondary),
                   ),
                   title: Text(d.nombre, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text('Fecha real: $f\nEstado: ${d.isPublished ? "Publicado" : "Oculto"}'),
+                  subtitle: Text('Fecha real: $f\nVisibilidad: ${_estadoLabelLargo(d.estado)}'),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Switch(
-                        value: d.isPublished,
-                        onChanged: (val) => _togglePublishDay(d.id, d.isPublished),
-                        activeColor: Theme.of(context).colorScheme.primary,
+                      PopupMenuButton<String>(
+                        tooltip: 'Cambiar visibilidad',
+                        initialValue: d.estado,
+                        onSelected: (s) => _setVisibility(d.id, s),
+                        itemBuilder: (_) => const [
+                          PopupMenuItem(value: 'borrador', child: Text('Borrador (oculto)')),
+                          PopupMenuItem(value: 'entrenadores', child: Text('Solo entrenadores')),
+                          PopupMenuItem(value: 'publico', child: Text('Público (todos)')),
+                        ],
+                        child: Chip(
+                          visualDensity: VisualDensity.compact,
+                          avatar: Icon(Icons.visibility, size: 16, color: _estadoColor(d.estado)),
+                          label: Text(_estadoLabel(d.estado)),
+                          backgroundColor: _estadoColor(d.estado).withValues(alpha: 0.12),
+                          side: BorderSide(color: _estadoColor(d.estado)),
+                        ),
                       ),
                       IconButton(icon: const Icon(Icons.delete, color: Colors.grey), onPressed: () => _deleteDay(d.id)),
                     ],

@@ -24,10 +24,12 @@ final authStateProvider = StreamProvider<AuthState>((ref) {
 final currentUserProfileProvider = FutureProvider<UserModel?>((ref) async {
   // Watch auth state to react to login/logout
   final authStateAsync = ref.watch(authStateProvider);
-  final user = authStateAsync.value?.session?.user ?? Supabase.instance.client.auth.currentUser;
-  
+  final user =
+      authStateAsync.value?.session?.user ??
+      Supabase.instance.client.auth.currentUser;
+
   if (user == null) return null;
-  
+
   final authRepo = ref.watch(authRepositoryProvider);
   return await authRepo.getUserProfile(user.id);
 });

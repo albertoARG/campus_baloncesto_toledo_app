@@ -23,3 +23,8 @@ final groupsProvider = FutureProvider<List<GroupModel>>((ref) async {
 final groupMembersProvider = FutureProvider.family<List<UserModel>, String>((ref, groupId) async {
   return ref.watch(groupsRepositoryProvider).getGroupMembers(groupId);
 });
+
+// IDs de jugadores que ya pertenecen a algún grupo de competición.
+final playersInCompetitionGroupsProvider = FutureProvider<Set<String>>((ref) async {
+  return ref.watch(groupsRepositoryProvider).getPlayersInCompetitionGroups();
+});

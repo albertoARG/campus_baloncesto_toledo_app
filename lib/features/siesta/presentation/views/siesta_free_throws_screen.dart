@@ -18,6 +18,44 @@ class SiestaFreeThrowsScreen extends ConsumerStatefulWidget {
 class _SiestaFreeThrowsScreenState extends ConsumerState<SiestaFreeThrowsScreen> {
   bool _isExporting = false;
 
+  // Intentos ocultos mientras corre la ventana de "deshacer".
+  final Set<String> _pendingDeleteIds = {};
+
+  Future<void> _deleteScore(dynamic score) async {
+    setState(() => _pendingDeleteIds.add(score.id));
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearSnackBars();
+    final controller = messenger.showSnackBar(
+      SnackBar(
+        content: Text('Resultado eliminado (${score.puntos} tiros)'),
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(label: 'DESHACER', onPressed: () {}),
+      ),
+    );
+
+    final reason = await controller.closed;
+    if (!mounted) return;
+
+    if (reason == SnackBarClosedReason.action) {
+      setState(() => _pendingDeleteIds.remove(score.id));
+      return;
+    }
+
+    try {
+      await ref.read(siestaRepositoryProvider).deleteDailyScore(score.id);
+      ref.invalidate(siestaDailyScoresProvider(widget.competitionId));
+      ref.invalidate(siestaParticipantsProvider(widget.competitionId));
+    } catch (e) {
+      if (mounted) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('No se pudo eliminar: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _pendingDeleteIds.remove(score.id));
+    }
+  }
+
   Future<void> _exportToPdf() async {
     if (_isExporting) return;
     final scores =
@@ -107,7 +145,10 @@ class _SiestaFreeThrowsScreenState extends ConsumerState<SiestaFreeThrowsScreen>
         ],
       ),
       body: scoresAsync.when(
-        data: (scores) {
+        data: (allScores) {
+          final scores = allScores
+              .where((s) => !_pendingDeleteIds.contains(s.id))
+              .toList();
           if (scores.isEmpty) {
             return const Center(child: Text('No hay intentos registrados aún.'));
           }
@@ -141,29 +182,7 @@ class _SiestaFreeThrowsScreenState extends ConsumerState<SiestaFreeThrowsScreen>
                       const SizedBox(width: 8),
                       IconButton(
                         icon: const Icon(Icons.delete, color: Colors.red),
-                        onPressed: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('Eliminar intento'),
-                              content: const Text('¿Estás seguro de eliminar este resultado?'),
-                              actions: [
-                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-                                TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Eliminar', style: TextStyle(color: Colors.red))),
-                              ],
-                            ),
-                          );
-                          if (confirm == true) {
-                            try {
-                              await ref.read(siestaRepositoryProvider).deleteDailyScore(score.id);
-                              ref.invalidate(siestaDailyScoresProvider(widget.competitionId));
-                            } catch (e) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-                              }
-                            }
-                          }
-                        },
+                        onPressed: () => _deleteScore(score),
                       ),
                     ],
                   ],

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../data/models/group_model.dart';
 import '../providers/groups_providers.dart';
 import '../../../admin/presentation/providers/admin_providers.dart';
+import '../../../../core/widgets/search_field.dart';
 
 class GroupDetailScreen extends ConsumerWidget {
   final GroupModel group;
@@ -10,30 +11,62 @@ class GroupDetailScreen extends ConsumerWidget {
   const GroupDetailScreen({super.key, required this.group});
 
   void _showAddMemberDialog(BuildContext context, WidgetRef ref) {
-    // Obtenemos todos los usuarios para poder seleccionar
-    final usersAsync = ref.watch(allUsersProvider);
-
+    String query = '';
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (context) {
-        return Container(
+        return StatefulBuilder(
+          builder: (context, setSheetState) => Container(
           height: MediaQuery.of(context).size.height * 0.7,
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
           child: Column(
             children: [
               const Text(
                 'Añadir Jugador',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 16),
+              SearchField(
+                hintText: 'Buscar jugador…',
+                onChanged: (v) =>
+                    setSheetState(() => query = v.trim().toLowerCase()),
+              ),
               Expanded(
-                child: usersAsync.when(
+                // Observamos los providers DENTRO del sheet para que se
+                // reconstruya cuando terminen de cargar (si no, se quedaba
+                // «cargando» hasta cerrar y reabrir).
+                child: Consumer(
+                  builder: (context, ref, _) {
+                  final usersAsync = ref.watch(allUsersProvider);
+                  final assignedAsync =
+                      ref.watch(playersInCompetitionGroupsProvider);
+                  return usersAsync.when(
                   data: (users) {
+                    // Excluimos a los que ya tienen grupo de competición.
+                    final assigned = assignedAsync.value ?? <String>{};
                     // Solo jugadores o visitantes para simplificar, o todos
                     final eligibleUsers = users
                         .where((u) => u.role == 'jugador' || u.role == 'jugador premium' || u.role == 'visitante')
+                        .where((u) => !assigned.contains(u.id))
+                        .where((u) => query.isEmpty ||
+                            '${u.nombre} ${u.apellidos}'
+                                .toLowerCase()
+                                .contains(query))
                         .toList();
+
+                    if (eligibleUsers.isEmpty) {
+                      return Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            query.isNotEmpty
+                                ? 'Sin resultados para «$query».'
+                                : 'No hay jugadores disponibles.\nTodos los jugadores ya pertenecen a un grupo de competición.',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      );
+                    }
 
                     return ListView.builder(
                       itemCount: eligibleUsers.length,
@@ -48,6 +81,7 @@ class GroupDetailScreen extends ConsumerWidget {
                               try {
                                 await ref.read(groupsRepositoryProvider).addMemberToGroup(group.id, user.id);
                                 ref.invalidate(groupMembersProvider(group.id));
+                                ref.invalidate(playersInCompetitionGroupsProvider);
                                 if (context.mounted) {
                                   Navigator.pop(context);
                                   ScaffoldMessenger.of(context).showSnackBar(
@@ -69,10 +103,13 @@ class GroupDetailScreen extends ConsumerWidget {
                   },
                   loading: () => const Center(child: CircularProgressIndicator()),
                   error: (e, s) => Center(child: Text('Error: $e')),
+                  );
+                },
                 ),
               ),
             ],
           ),
+        ),
         );
       },
     );
@@ -135,9 +172,23 @@ class GroupDetailScreen extends ConsumerWidget {
                 trailing: IconButton(
                   icon: const Icon(Icons.remove_circle, color: Colors.red),
                   onPressed: () async {
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (c) => AlertDialog(
+                        title: const Text('Quitar del grupo'),
+                        content: Text(
+                            '¿Seguro que quieres sacar a ${member.nombre} ${member.apellidos} de este grupo?'),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('Cancelar')),
+                          TextButton(onPressed: () => Navigator.pop(c, true), child: const Text('Quitar', style: TextStyle(color: Colors.red))),
+                        ],
+                      ),
+                    );
+                    if (confirm != true) return;
                     try {
                       await ref.read(groupsRepositoryProvider).removeMemberFromGroup(group.id, member.id);
                       ref.invalidate(groupMembersProvider(group.id));
+                      ref.invalidate(playersInCompetitionGroupsProvider);
                       if (context.mounted) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(content: Text('${member.nombre} eliminado del grupo')),

@@ -66,15 +66,16 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
         nombre: _nombreController.text.trim(),
         apellidos: _apellidosController.text.trim(),
       );
-      
+
       // Update the public.users table directly to add "edad".
       // Solo funcionará si el registro devuelve sesión (sin confirmación por
       // email); si falla por RLS no debe romper el alta, así que se aísla.
       if (res.user != null && _edadController.text.trim().isNotEmpty) {
         try {
-          await Supabase.instance.client.from('users').update({
-            'edad': int.parse(_edadController.text.trim())
-          }).eq('id', res.user!.id);
+          await Supabase.instance.client
+              .from('users')
+              .update({'edad': int.parse(_edadController.text.trim())})
+              .eq('id', res.user!.id);
         } catch (_) {
           // La edad se podrá completar más tarde desde el perfil.
         }
@@ -98,14 +99,14 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
       }
     } on AuthException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(_mensajeErrorRegistro(e))),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(_mensajeErrorRegistro(e))));
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(content: Text('Unexpected error occurred: $e')),
+          SnackBar(content: Text('Unexpected error occurred: $e')),
         );
       }
     } finally {
@@ -116,9 +117,7 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Registro'),
-      ),
+      appBar: AppBar(title: const Text('Registro')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -128,17 +127,14 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Center(
-                  child: Image.asset(
-                    'assets/images/logo32.png',
-                    height: 80,
-                  ),
+                  child: Image.asset('assets/images/logo32.png', height: 80),
                 ),
                 const SizedBox(height: 16),
                 Text(
                   'Crea tu cuenta',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                    fontWeight: FontWeight.bold,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 32),
@@ -181,7 +177,9 @@ class _SignUpScreenState extends ConsumerState<SignUpScreen> {
                   ),
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
-                    if (value == null || value.isEmpty || !value.contains('@')) {
+                    if (value == null ||
+                        value.isEmpty ||
+                        !value.contains('@')) {
                       return 'Por favor, introduce un correo válido.';
                     }
                     return null;

@@ -31,16 +31,10 @@ class VeladasRepository {
     return (res as List).map((j) => VeladaGroupModel.fromJson(j)).toList();
   }
 
-  // Marcar un grupo como ganador
-  Future<void> markGroupAsWinner(String veladaId, String groupId) async {
-    // 1. Quitar ganador de todos los grupos de esta velada
+  // Marcar/desmarcar un grupo como ganador. Permite VARIOS ganadores (empates).
+  Future<void> setGroupWinner(String groupId, bool isWinner) async {
     await _supabase.from('velada_groups')
-       .update({'is_winner': false})
-       .eq('velada_id', veladaId);
-       
-    // 2. Asignar ganador al seleccionado
-    await _supabase.from('velada_groups')
-       .update({'is_winner': true})
+       .update({'is_winner': isWinner})
        .eq('id', groupId);
   }
 
@@ -50,6 +44,14 @@ class VeladasRepository {
         .select('*, users(*)')
         .eq('group_id', groupId);
     return (res as List).map((j) => VeladaMemberModel.fromJson(j)).toList();
+  }
+
+  // user_ids que ya están en algún grupo de esta velada (para no repetirlos).
+  Future<Set<String>> getAssignedUserIds(String veladaId) async {
+    final res = await _supabase.from('velada_group_members')
+        .select('user_id, velada_groups!inner(velada_id)')
+        .eq('velada_groups.velada_id', veladaId);
+    return (res as List).map((r) => r['user_id'] as String).toSet();
   }
 
   // Algoritmo de balanceo por edades

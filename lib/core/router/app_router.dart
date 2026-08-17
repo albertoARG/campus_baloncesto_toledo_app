@@ -1,8 +1,10 @@
 import 'package:campus_baloncesto_app/features/auth/presentation/views/sign_in_screen.dart';
 import 'package:campus_baloncesto_app/features/auth/presentation/views/sign_up_screen.dart';
+import 'package:campus_baloncesto_app/features/auth/presentation/views/reset_password_screen.dart';
 import 'package:campus_baloncesto_app/features/home/presentation/views/home_screen.dart';
 import 'package:campus_baloncesto_app/features/admin/presentation/views/user_management_screen.dart';
 import 'package:campus_baloncesto_app/features/admin/presentation/views/edit_user_screen.dart';
+import 'package:campus_baloncesto_app/features/admin/presentation/views/player_management_screen.dart';
 import 'package:campus_baloncesto_app/features/admin/presentation/views/admin_dashboard_screen.dart';
 import 'package:campus_baloncesto_app/core/models/user_model.dart';
 import 'package:campus_baloncesto_app/features/competitions/presentation/views/standings_screen.dart';
@@ -28,6 +30,7 @@ import 'package:campus_baloncesto_app/features/siesta/presentation/views/siesta_
 import 'package:campus_baloncesto_app/features/siesta/presentation/views/siesta_participant_matches_screen.dart';
 import 'package:campus_baloncesto_app/features/siesta/presentation/views/siesta_participant_scores_screen.dart';
 import 'package:campus_baloncesto_app/features/trainings/presentation/views/trainings_screen.dart';
+import 'package:campus_baloncesto_app/features/tools/presentation/views/timer_screen.dart';
 import 'package:campus_baloncesto_app/features/matches/presentation/views/matches_screen.dart';
 import 'package:campus_baloncesto_app/features/matches/presentation/views/live_match_screen.dart';
 import 'package:campus_baloncesto_app/features/matches/presentation/views/match_teams_screen.dart';
@@ -51,14 +54,24 @@ class GoRouterRefreshStream extends ChangeNotifier {
   }
 }
 
+/// Se activa cuando el usuario abre el enlace de recuperación de contraseña.
+/// Mientras esté activo, el router fuerza la pantalla de nueva contraseña
+/// (evita que una redirección o carrera de eventos lo mande a otro sitio).
+final passwordRecoveryPending = ValueNotifier<bool>(false);
+
 final appRouter = GoRouter(
   initialLocation: '/',
-  refreshListenable: GoRouterRefreshStream(
-    Supabase.instance.client.auth.onAuthStateChange,
-  ),
+  refreshListenable: Listenable.merge([
+    GoRouterRefreshStream(Supabase.instance.client.auth.onAuthStateChange),
+    passwordRecoveryPending,
+  ]),
   routes: [
     GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
     GoRoute(path: '/login', builder: (context, state) => const SignInScreen()),
+    GoRoute(
+      path: '/reset-password',
+      builder: (context, state) => const ResetPasswordScreen(),
+    ),
     GoRoute(
       path: '/register',
       builder: (context, state) => const SignUpScreen(),
@@ -126,6 +139,14 @@ final appRouter = GoRouter(
           EditUserScreen(user: state.extra as UserModel),
     ),
     GoRoute(
+      path: '/admin/players',
+      builder: (context, state) => const PlayerManagementScreen(),
+    ),
+    GoRoute(
+      path: '/admin/players/new',
+      builder: (context, state) => const EditUserScreen(),
+    ),
+    GoRoute(
       path: '/admin/groups',
       builder: (context, state) => const GroupManagementScreen(),
     ),
@@ -176,6 +197,10 @@ final appRouter = GoRouter(
       builder: (context, state) => const TrainingsScreen(),
     ),
     GoRoute(path: '/stats', builder: (context, state) => const StatsScreen()),
+    GoRoute(
+      path: '/cronometro',
+      builder: (context, state) => const TimerScreen(),
+    ),
     GoRoute(path: '/matches', builder: (context, state) => const MatchesScreen()),
     GoRoute(path: '/match-teams', builder: (context, state) => const MatchTeamsScreen()),
     GoRoute(
@@ -185,6 +210,12 @@ final appRouter = GoRouter(
     ),
   ],
   redirect: (context, state) {
+    // Durante la recuperación de contraseña, forzar la pantalla de nueva clave.
+    if (passwordRecoveryPending.value &&
+        state.matchedLocation != '/reset-password') {
+      return '/reset-password';
+    }
+
     final session = Supabase.instance.client.auth.currentSession;
     final isGoingToAuth =
         state.matchedLocation == '/login' ||

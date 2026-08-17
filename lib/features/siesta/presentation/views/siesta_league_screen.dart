@@ -144,6 +144,133 @@ class _SiestaLeagueScreenState extends ConsumerState<SiestaLeagueScreen> {
     });
   }
 
+  Future<void> _generateGroupMatches() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Generar partidos'),
+        content: const Text(
+          'Se crearán todos los partidos "todos contra todos" dentro de cada '
+          'grupo. Los enfrentamientos que ya existan no se duplican.\n\n'
+          '¿Continuar?',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Generar')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      final n = await ref
+          .read(siestaRepositoryProvider)
+          .generateGroupMatches(widget.competitionId);
+      ref.invalidate(siestaMatchesProvider(widget.competitionId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              n == 0
+                  ? 'No había partidos nuevos que crear (ya generados, o hay menos de 2 por grupo).'
+                  : '$n partidos generados',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _generatePlayoff() async {
+    final size = await showDialog<int>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        title: const Text('Generar eliminatoria'),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+            child: Text(
+              'Clasifican los primeros de cada grupo, luego los segundos y, si '
+              'hace falta, los mejores terceros. Los empates se deciden por '
+              'enfrentamiento directo.',
+              style: Theme.of(ctx).textTheme.bodySmall,
+            ),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 4),
+            child: const Text('Semifinales  ·  4 clasificados'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 8),
+            child: const Text('Cuartos  ·  8 clasificados'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx, 16),
+            child: const Text('Octavos  ·  16 clasificados'),
+          ),
+          SimpleDialogOption(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+    if (size == null) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Generar eliminatoria'),
+        content: Text(
+          'Se creará el cuadro con $size clasificados. Si ya había una '
+          'eliminatoria, se reemplazará (los partidos de grupos no se tocan).\n\n'
+          '¿Continuar?',
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancelar')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Generar')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      final n = await ref
+          .read(siestaRepositoryProvider)
+          .generatePlayoff(widget.competitionId, size);
+      ref.invalidate(siestaMatchesProvider(widget.competitionId));
+      ref.invalidate(siestaCompetitionsProvider);
+      if (mounted) {
+        setState(() => _selectedTabIndex = 1); // ir al cuadro
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Eliminatoria generada ($n partidos)')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$e'.replaceFirst('Exception: ', '')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final participantsAsync = ref.watch(siestaParticipantsProvider(widget.competitionId));
@@ -316,6 +443,25 @@ class _SiestaLeagueScreenState extends ConsumerState<SiestaLeagueScreen> {
                         context: context,
                         builder: (ctxDialog) => AddMatchDialog(competitionId: widget.competitionId),
                       );
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.auto_awesome_motion),
+                    title: const Text('Generar partidos por grupo'),
+                    subtitle:
+                        const Text('Todos contra todos dentro de cada grupo'),
+                    onTap: () {
+                      Navigator.pop(ctxBottomSheet);
+                      _generateGroupMatches();
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.emoji_events),
+                    title: const Text('Generar eliminatoria (playoff)'),
+                    subtitle: const Text('Semifinales, cuartos u octavos'),
+                    onTap: () {
+                      Navigator.pop(ctxBottomSheet);
+                      _generatePlayoff();
                     },
                   ),
                 ],
